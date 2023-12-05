@@ -28,3 +28,6 @@ def is_int(x):
 
 def is_positive(x):
     assert x>0, f"Not a positive: {x}"
+
+def is_not_negative(x):
+    assert x>=0, f"Shouldnt be negative: {x}"
