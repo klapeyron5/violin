@@ -73,7 +73,7 @@ class _CallPipe(TransformCall):
 
     def _after(self, data, data_call_imm, data_call_out):
         data_call_out, _data = self.__call_out_keys_checker(**data_call_out)
-        assert len(_data.keys()) == 0, f"Check returned keys for {self}; This keys are not declared as DCALL_OUT: {_data.keys()}"
+        assert len(_data.keys()) == 0, f"Check returned keys for {self}; These keys are not declared as DCALL_OUT: {_data.keys()}"
         assert set(data_call_out.keys()) & set(data_call_imm.keys()) == set()  # TODO delete
         common_keys = set(data_call_out.keys()) & set(data.keys())
         assert common_keys == set(), f'Common keys: {common_keys}'
