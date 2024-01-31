@@ -4,7 +4,7 @@ from copy import deepcopy
 from violin import checkers as vch
 
 
-def test_default_0():
+def test_0():
     class T0(Transform):
         def _init(self, **cnfg):
             pass
@@ -15,7 +15,7 @@ def test_default_0():
     assert isinstance(out, dict)
     assert len(out.keys())==0
 
-def test_default_1():
+def test_1():
     assert Transform.decs_DINIT == set()
     class A(Transform):
         pass
@@ -32,7 +32,7 @@ def test_default_1():
     assert A.decs_DCALL_MUT == set()
     assert A.decs_DCALL_OUT == set()
 
-def test_default_2():
+def test_2():
     class A(Transform):
         DINIT_smth = (None, None)
     assert A.decs_DINIT == {'smth',}
@@ -43,7 +43,7 @@ def test_default_2():
     assert A.decs_DINIT == {'smth',}
     assert A.decs_DCALL_IMM == {'smth',}
 
-def test2():
+def test_3():
     class A(Transform):
         @staticmethod
         def f(x):
@@ -82,12 +82,10 @@ def test2():
     except Exception: pass
     else: raise
 
-def test3():
+def test_4():
     class A(Transform):
         DINIT_smth = (None, None)
         DCALL_IMM_smth = (None, None)
-        # DCALL_IMM_smth = (None, None)
-        # DCALL_MUT_smth = (None, None)
     class B(A):
         pass
     try: B(**{B.DINIT_smth: 0})
@@ -99,7 +97,7 @@ def test3():
             pass
     b = B(**{B.DINIT_smth: 0})
     try:
-        b(**{B.DINIT_smth: 0})  # TODO shouldn't pass with DINIT key as DCALL key
+        b(**{B.DCALL_IMM_smth: 0})
     except NotImplementedError: pass
     else: raise
 
@@ -110,7 +108,7 @@ def test3():
             pass
     b = B(**{B.DINIT_smth: 0})
     try:
-        b(**{B.DINIT_smth: 0})
+        b(**{B.DCALL_IMM_smth: 0})
     except TypeError: pass  # TODO should write proper error msg about not returning dict from _call
     else: raise
 
@@ -120,14 +118,52 @@ def test3():
         def _call(self, **data):
             return {}
     b = B(**{B.DINIT_smth: 0})
-    b(**{B.DINIT_smth: 0})
+    b(**{B.DCALL_IMM_smth: 0})
 
-def test33():
+def test_5():
     class A(Transform):
+        @classmethod
+        def check(self, x):  # TODO couldn't use self method now !
+            assert x == 19
         DINIT_smth = (None, None)
-        DCALL_IMM_smth = (None, None)
+        DINIT_smth0 = (None, None)
+        DCALL_IMM_smth = (check, None)
+        DCALL_MUT_smth0 = (check, None)
+        def _init(self, smth, smth0):
+            self.smth = smth
+        def _call(self, smth, smth0):
+            assert smth0==19
+            return {}
+    a = A(**{
+        A.DCALL_IMM_smth: 19,
+        A.DCALL_MUT_smth0: 19,
+    })
+    a(**{
+        A.DCALL_IMM_smth: 19,
+        A.DCALL_MUT_smth0: 19,
+    })
+    a(**{
+        A.DINIT_smth: 19,
+        A.DINIT_smth0: 19,
+    })
 
-def test4():
+    a(**{
+        A.DCALL_IMM_smth: 0,  # TODO IMM keys are unchecked now, should use wrapper for in-out IMM keys checking
+        A.DCALL_MUT_smth0: 19,
+    })
+    a(**{
+        A.DINIT_smth: 0,
+        A.DINIT_smth0: 19,
+    })
+    try:
+        a(**{
+            A.DCALL_IMM_smth: 0,
+            A.DCALL_MUT_smth0: 1,
+        })
+    except Exception: pass
+    else: raise
+
+def test_6():
     class A(Transform):
         VAR = 9
         VAR0 = 99
@@ -175,7 +211,7 @@ def test4():
         raise Exception
     B(**{A.DINIT_smth: 8, A.DINIT_smth0: 88})
 
-def test5():
+def test_7():
     def check_main_value(x):
         assert -1<=x<=1
 
@@ -209,7 +245,7 @@ def test5():
     out = tp()
     assert out['main_value'] == 0
 
-def test6():
+def test_8():
     class InputValue(Transform):
         @classmethod
         def check_main_value(cls, x):
@@ -271,7 +307,7 @@ def test6():
     assert out['main_value'] == 0
     assert out['modified_value'] == 0.01
 
-def test7():
+def test_9():
     class A(Transform):
         DCALL_IMM_var0 = (None, None)
         DCALL_MUT_var1 = (None, None)
@@ -320,7 +356,7 @@ def test8():
     })
 
 
-def test9():
+def test_10():
     d = static_declaration.dec_generator('DCALL_IMM_keykey', 'DCALL_IMM_', (vch.nullable(vch.is_str_not_empty), None))
     deepcopy(d)
 
@@ -341,18 +377,17 @@ def test9():
 
 
 def test():
-    test_default_0()
-    test_default_1()
-    test_default_2()
-    test2()
-    test3()
-    test33()
-    test4()
-    test5()
-    test6()
-    test7()
-    test8()
-    test9()
+    test_0()
+    test_1()
+    test_2()
+    test_3()
+    test_4()
+    test_5()
+    test_6()
+    test_7()
+    test_8()
+    test_9()
+    test_10()
 
 
 def main():
