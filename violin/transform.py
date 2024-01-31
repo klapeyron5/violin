@@ -1,5 +1,6 @@
 from copy import deepcopy
-from .static_declaration import DecsChecker, get_DecsFromTupleToDec
+import inspect, re
+from .static_declaration import dec_generator, Dec, DecsChecker
 
 
 class TransformInit:
@@ -22,6 +23,17 @@ class TransformCall:
         return self._call(**data)
     def _call(self, **data):
         raise NotImplementedError
+    
+    @staticmethod
+    def _check_call_decs_intersection(keys_call_imm, keys_call_mut, keys_call_out):
+        args = [keys_call_imm, keys_call_mut, keys_call_out]
+        assert all([isinstance(s, set) for s in args])
+        assert all([all([isinstance(x, str) for x in s]) for s in args])
+
+        call_imm_and_call_mut = set(keys_call_imm) & set(keys_call_mut)
+        assert call_imm_and_call_mut == set(), f"Error: intersection between keys_call_imm and keys_call_mut: {call_imm_and_call_mut}."
+        call_imm_and_out = set(keys_call_out) & set(keys_call_imm)
+        assert call_imm_and_out == set(), f"Error: intersection between keys_call_imm and keys_call_out: {call_imm_and_out}."
 
 
 class InitPipe(TransformInit):
@@ -36,10 +48,7 @@ These keys are not defined: {cnfg_external.keys()}."""
 
 class _CallPipe(TransformCall):
     def __init__(self, keys_call_imm, keys_call_mut, keys_call_out):
-        call_imm_and_call_mut = set(keys_call_imm) & set(keys_call_mut)
-        assert call_imm_and_call_mut == set(), f"Error: intersection between keys_call_imm and keys_call_mut: {call_imm_and_call_mut}."
-        call_imm_and_out = set(keys_call_out) & set(keys_call_imm)
-        assert call_imm_and_out == set(), f"Error: intersection between keys_call_imm and keys_call_out: {call_imm_and_out}."
+        self._check_call_decs_intersection(keys_call_imm, keys_call_mut, keys_call_out)
 
         self.__call_keys_checker = DecsChecker(decs=set(keys_call_imm) | set(keys_call_mut), check_values=False, use_default_values=True)
         self.__call_mut_keys_checker = DecsChecker(decs=keys_call_mut, check_values=True, use_default_values=False)
@@ -93,10 +102,58 @@ class CallPipe(_CallPipe):
         )
 
 
+def get_DecsFromTupleToDec():
+    templates_startswith = TransformInit._DECS_INIT_STARTSWITH+TransformCall._DECS_CALL_STARTSWITH
+    assert isinstance(templates_startswith, tuple), templates_startswith
+    assert all([re.match(Dec.DecKey.RE_TEMPLATE_STARTSWITH, x) is not None for x in templates_startswith]), templates_startswith
+
+    def preproc_classmethod(func, cls):
+        c0 = isinstance(func, classmethod)
+        if c0 or isinstance(func, staticmethod):
+            # decide that vv is @classmethod of this cls and vv should be transformed
+            assert not hasattr(func, '__self__')
+            func_namespace = (func.__module__+'.'+func.__qualname__).split('.')
+            func_name = func_namespace[-1]
+            func_clsnamespace = func_namespace[:-1]
+            cls_namespace = (cls.__module__+'.'+cls.__qualname__).split('.')
+            assert func_clsnamespace == cls_namespace,\
+                f"U can use not bounded classmethod only from current class \
+{'.'.join(cls_namespace)}, but u r using from {'.'.join(func_clsnamespace)}"
+            func = getattr(cls, func_name)
+            if c0:
+                assert func.__self__ is cls
+        return func
+
+    class DecsFromTupleToDec(type):
+        TEMPLATES_STARTSWITH = templates_startswith
+
+        def __init__(cls, name, bases, attrs):
+            for template_startswith in cls.TEMPLATES_STARTSWITH:
+                decs = set()
+                # for attr_name in get_decs_attrnames_in_order(cls, template_startswith):
+                for attr_info in inspect.getmembers(cls):
+                    attr_name = attr_info[0]
+                    if attr_name.startswith(template_startswith):
+                        v = getattr(cls, attr_name)
+                        if isinstance(v, Dec):
+                            dec = v
+                        else:
+                            assert isinstance(v, tuple), f"{attr_name}: {v}"
+                            assert len(v) == 2, f"{attr_name}: {v}"
+                            v = tuple([preproc_classmethod(x, cls) for x in v])
+                            dec = dec_generator(attr_name, template_startswith, v)
+                        setattr(cls, attr_name, dec)
+                        decs.add(dec)
+                setattr(cls, 'decs_'+template_startswith[:-1], decs)
+            TransformCall._check_call_decs_intersection(*[getattr(cls, 'decs_'+d) for d in TransformCall._DECS_CALL])
+
+    return DecsFromTupleToDec
+
+
 class Transform(
         InitPipe, CallPipe,
         # meta cas I need to use decs as str dict keys when initing or calling instance of transform:
-        metaclass=get_DecsFromTupleToDec(TransformInit._DECS_INIT_STARTSWITH+TransformCall._DECS_CALL_STARTSWITH),
+        metaclass=get_DecsFromTupleToDec(),
     ):
     """
     Decs (declarations):

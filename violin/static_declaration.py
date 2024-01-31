@@ -28,7 +28,6 @@ def dec_generator(dec_key, dec_key_template_startswith, dec_val):
 
 
 class Dec(str):
-
     def __new__(cls, dec_key, *args, **kwargs):#dec_key_template_startswith, dec_val):
         instance = str.__new__(cls, dec_key)
         return instance
@@ -78,52 +77,6 @@ class Dec(str):
                 func_args = get_function_arguments(default_value)
                 # assert len(func_args)==0  TODO
             return default_value
-
-
-def get_DecsFromTupleToDec(templates_startswith):
-    assert isinstance(templates_startswith, tuple)
-    assert all([re.match(Dec.DecKey.RE_TEMPLATE_STARTSWITH, x) is not None for x in templates_startswith]), templates_startswith
-
-    def preproc_classmethod(func, cls):
-        c0 = isinstance(func, classmethod)
-        if c0 or isinstance(func, staticmethod):
-            # decide that vv is @classmethod of this cls and vv should be transformed
-            assert not hasattr(func, '__self__')
-            func_namespace = (func.__module__+'.'+func.__qualname__).split('.')
-            func_name = func_namespace[-1]
-            func_clsnamespace = func_namespace[:-1]
-            cls_namespace = (cls.__module__+'.'+cls.__qualname__).split('.')
-            assert func_clsnamespace == cls_namespace,\
-                f"U can use not bounded classmethod only from current class \
-{'.'.join(cls_namespace)}, but u r using from {'.'.join(func_clsnamespace)}"
-            func = getattr(cls, func_name)
-            if c0:
-                assert func.__self__ is cls
-        return func
-
-    class DecsFromTupleToDec(type):
-        TEMPLATES_STARTSWITH = templates_startswith
-
-        def __init__(cls, name, bases, attrs):
-            for template_startswith in cls.TEMPLATES_STARTSWITH:
-                decs = set()
-                # for attr_name in get_decs_attrnames_in_order(cls, template_startswith):
-                for attr_info in inspect.getmembers(cls):
-                    attr_name = attr_info[0]
-                    if attr_name.startswith(template_startswith):
-                        v = getattr(cls, attr_name)
-                        if isinstance(v, Dec):
-                            dec = v
-                        else:
-                            assert isinstance(v, tuple), f"{attr_name}: {v}"
-                            assert len(v) == 2, f"{attr_name}: {v}"
-                            v = tuple([preproc_classmethod(x, cls) for x in v])
-                            dec = dec_generator(attr_name, template_startswith, v)
-                        setattr(cls, attr_name, dec)
-                        decs.add(dec)
-                setattr(cls, 'decs_'+template_startswith[:-1], decs)
-
-    return DecsFromTupleToDec
 
 
 class DecsChecker:

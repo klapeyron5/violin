@@ -4,7 +4,7 @@ from copy import deepcopy
 from violin import checkers as vch
 
 
-def test_default():
+def test_default_0():
     class T0(Transform):
         def _init(self, **cnfg):
             pass
@@ -15,7 +15,7 @@ def test_default():
     assert isinstance(out, dict)
     assert len(out.keys())==0
 
-def test0():
+def test_default_1():
     assert Transform.decs_DINIT == set()
     class A(Transform):
         pass
@@ -32,7 +32,7 @@ def test0():
     assert A.decs_DCALL_MUT == set()
     assert A.decs_DCALL_OUT == set()
 
-def test1():
+def test_default_2():
     class A(Transform):
         DINIT_smth = (None, None)
     assert A.decs_DINIT == {'smth',}
@@ -53,6 +53,7 @@ def test2():
         def _init(self, **config):
             pass
     A(**{A.DINIT_smth: 0})
+
     class A(Transform):
         @staticmethod
         def f(x):
@@ -61,12 +62,9 @@ def test2():
         DINIT_smth = (f, None)
         def _init(self, **config):
             pass
-    try:
-        A(**{A.DINIT_smth: 0})
-    except Exception:
-        pass
-    else:
-        raise Exception
+    try: A(**{A.DINIT_smth: 0})
+    except Exception: pass
+    else: raise
     
     class A(Transform):
         DINIT_smth = (None, None)
@@ -75,35 +73,59 @@ def test2():
     assert A.decs_DINIT == {'smth',}
     assert A.decs_DCALL_IMM == {'smth',}
 
-    class A(Transform):
-        DINIT_smth = (None, None)
-        DCALL_IMM_smth = (None, None)
-        DCALL_IMM_smth = (None, None)
-        DCALL_MUT_smth = (None, None)
-    assert A.decs_DINIT == {'smth',}
-    assert A.decs_DCALL_IMM == {'smth',}
-    assert A.decs_DCALL_MUT == {'smth',}  # TODO I wanna detect intersections at a metaclass time
     try:
-        A(**{A.DINIT_smth: 0})
-    except Exception:
-        pass  # TODO not at an init time (look at TODO above)
-    else:
-        raise Exception
+        class A(Transform):
+            DINIT_smth = (None, None)
+            DCALL_IMM_smth = (None, None)
+            DCALL_IMM_smth = (None, None)
+            DCALL_MUT_smth = (None, None)
+    except Exception: pass
+    else: raise
 
 def test3():
     class A(Transform):
         DINIT_smth = (None, None)
         DCALL_IMM_smth = (None, None)
-        DCALL_IMM_smth = (None, None)
-        DCALL_MUT_smth = (None, None)
+        # DCALL_IMM_smth = (None, None)
+        # DCALL_MUT_smth = (None, None)
     class B(A):
         pass
+    try: B(**{B.DINIT_smth: 0})
+    except NotImplementedError: pass
+    else: raise
+
+    class B(A):
+        def _init(self, **config):
+            pass
+    b = B(**{B.DINIT_smth: 0})
     try:
-        B(**{B.DINIT_smth: 0})
-    except Exception:
-        pass
-    else:
-        raise Exception
+        b(**{B.DINIT_smth: 0})  # TODO shouldn't pass with DINIT key as DCALL key
+    except NotImplementedError: pass
+    else: raise
+
+    class B(A):
+        def _init(self, **config):
+            pass
+        def _call(self, **data):
+            pass
+    b = B(**{B.DINIT_smth: 0})
+    try:
+        b(**{B.DINIT_smth: 0})
+    except TypeError: pass  # TODO should write proper error msg about not returning dict from _call
+    else: raise
+
+    class B(A):
+        def _init(self, **config):
+            pass
+        def _call(self, **data):
+            return {}
+    b = B(**{B.DINIT_smth: 0})
+    b(**{B.DINIT_smth: 0})
+
+def test33():
+    class A(Transform):
+        DINIT_smth = (None, None)
+        DCALL_IMM_smth = (None, None)
 
 def test4():
     class A(Transform):
@@ -319,10 +341,12 @@ def test9():
 
 
 def test():
-    test0()
-    test1()
+    test_default_0()
+    test_default_1()
+    test_default_2()
     test2()
     test3()
+    test33()
     test4()
     test5()
     test6()
@@ -332,6 +356,5 @@ def test():
 
 
 def main():
-    test_default()
     test()
     print(__file__, 'test passed')
