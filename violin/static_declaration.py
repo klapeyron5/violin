@@ -2,6 +2,7 @@
 # Dec is class static variable: D<PREFIX>_<name> = (value_checker: callable(x)->None, default_value: callable()->x)
 # default_value is not necessary
 import inspect, re
+from copy import deepcopy
 
 
 def get_function_arguments(f):
@@ -125,7 +126,7 @@ kwargs.keys(): {data.keys()}
             cls._f2(dec, data)  # check default value
     @classmethod
     def _f2(cls, dec: Dec, data: dict):
-        dec.value_checker(data[dec])
+        dec.value_checker(deepcopy(data[dec]))
     @classmethod
     def _f3(cls, dec: Dec, data: dict):
         if dec not in data:
