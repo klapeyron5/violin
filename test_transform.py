@@ -376,20 +376,64 @@ def test_10():
     deepcopy(A.DCALL_IMM_keykey)
 
 
+def test_11():
+    # TODO WOW checker can change variable
+    class A(Transform):
+        @staticmethod
+        def check(x):
+            assert isinstance(x, list)
+            x.append(113)
+        
+        DCALL_IMM_x0 = (check, None)
+        DCALL_MUT_x1 = (check, None)
+        DCALL_OUT_x1 = (check, None)
+
+        def _init(self, **cnfg):
+            pass
+
+        def _call(self, x0, x1):
+            return dict(x1=x1)
+    a = A()
+    x0 = [0,1,2]
+    x1 = [1,2,3]
+    out = a(**{
+        a.DCALL_IMM_x0: deepcopy(x0),
+        a.DCALL_MUT_x1: deepcopy(x1),
+    })
+    assert out[A.DCALL_IMM_x0] == x0
+    assert out[A.DCALL_OUT_x1] == x1
+
+
+def wrap_test(test):
+    try:
+        test()
+        return 0
+    except Exception as e:
+        print(f'ERROR in {test.__name__}')
+        print(e)
+    return 1
+
+
 def test():
-    test_0()
-    test_1()
-    test_2()
-    test_3()
-    test_4()
-    test_5()
-    test_6()
-    test_7()
-    test_8()
-    test_9()
-    test_10()
+    all_i = 0
+    failed_i = 0
+    for f in globals():
+        if f.startswith('test_'):
+            out = wrap_test(globals()[f])
+            all_i += 1
+            if out == 1:
+                failed_i += 1
+            else:
+                assert out == 0
+    return all_i, failed_i
 
 
 def main():
-    test()
-    print(__file__, 'test passed')
+    all_i, failed_i = test()
+    print('--------------------------')
+    print(f'{failed_i}/{all_i} tests failed')
+    print(__file__)
+    if failed_i != 0:
+        raise Exception('Tests failed!')
+    else:
+        print('Tests passed!')

@@ -3,6 +3,10 @@ import inspect, re
 from .static_declaration import dec_generator, Dec, DecsChecker
 
 
+# class ViolinException(Exception):
+#     pass
+
+
 class TransformInit:
     _DEC_TEMPLATE_DINIT = 'DINIT'
     _DECS_INIT = (_DEC_TEMPLATE_DINIT,)  # TODO intersection with other _DECS
@@ -10,6 +14,7 @@ class TransformInit:
     def __init__(self, **cnfg):
         self._init(**cnfg)
     def _init(self, **cnfg):
+        # raise ViolinException
         raise NotImplementedError
 
 
@@ -177,5 +182,8 @@ class Transform(
     _call(self, **data)
     """
     def __init__(self, **cnfg):
+        # try:
         InitPipe.__init__(self, **cnfg)
         CallPipe.__init__(self,)
+        # except ViolinException as e:
+        #     raise ViolinException from None
