@@ -126,7 +126,8 @@ kwargs.keys(): {data.keys()}
             cls._f2(dec, data)  # check default value
     @classmethod
     def _f2(cls, dec: Dec, data: dict):
-        dec.value_checker(deepcopy(data[dec]))
+        # dec.value_checker(deepcopy(data[dec]))
+        dec.value_checker(data[dec])
     @classmethod
     def _f3(cls, dec: Dec, data: dict):
         if dec not in data:
