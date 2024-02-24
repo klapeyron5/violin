@@ -1,8 +1,4 @@
-from test_transform import main as main_transform
-
-
-def main():
-    main_transform()
+from test_transform import main
 
 
 if __name__ == '__main__':

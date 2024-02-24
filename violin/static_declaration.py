@@ -81,10 +81,15 @@ class Dec(str):
 
 
 class DecsChecker:
-    def __init__(self, decs: set, check_values=True, use_default_values=False):
+    def __init__(self, decs: set, check_values=True, use_default_values=False, deepcopy_checked_values=False):  # TODO
         assert isinstance(decs, set)
         assert all([isinstance(x, Dec) for x in decs])
         self.decs = decs
+
+        if deepcopy_checked_values:
+            self.__class__._f2 = self._f2_1
+        else:
+            self.__class__._f2 = self._f2_1
 
         if check_values and use_default_values:
             self._decs_process = self._f3
@@ -123,11 +128,13 @@ kwargs.keys(): {data.keys()}
     def _f1(cls, dec: Dec, data: dict):
         if dec not in data:
             data[dec] = dec.default_value()
-            cls._f2(dec, data)  # check default value
+            # cls._f2(dec, data)  # check default value
     @classmethod
-    def _f2(cls, dec: Dec, data: dict):
-        # dec.value_checker(deepcopy(data[dec]))
+    def _f2_0(cls, dec: Dec, data: dict):
         dec.value_checker(data[dec])
+    @classmethod
+    def _f2_1(cls, dec: Dec, data: dict):
+        dec.value_checker(deepcopy(data[dec]))
     @classmethod
     def _f3(cls, dec: Dec, data: dict):
         if dec not in data:

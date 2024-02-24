@@ -88,9 +88,12 @@ def test_4():
         DCALL_IMM_smth = (None, None)
     class B(A):
         pass
-    try: B(**{B.DINIT_smth: 0})
-    except NotImplementedError: pass
-    else: raise
+    try: 
+        B(**{B.DINIT_smth: 0})
+    except NotImplementedError: 
+        pass
+    else: 
+        raise
 
     class B(A):
         def _init(self, **config):
@@ -323,7 +326,7 @@ def test_9():
         A.DCALL_MUT_var1: 4,
     })
 
-def test8():
+def test_10():
     class A(Transform):
         DCALL_IMM_var0 = (None, None)
         DCALL_MUT_var1 = (None, None)
@@ -356,7 +359,7 @@ def test8():
     })
 
 
-def test_10():
+def test_11():
     d = static_declaration.dec_generator('DCALL_IMM_keykey', 'DCALL_IMM_', (vch.nullable(vch.is_str_not_empty), None))
     deepcopy(d)
 
@@ -376,24 +379,27 @@ def test_10():
     deepcopy(A.DCALL_IMM_keykey)
 
 
-def test_11():
-    # TODO WOW checker can change variable
+def test_12():
     class A(Transform):
         @staticmethod
         def check(x):
             assert isinstance(x, list)
             x.append(113)
+
+        DINIT_x0 = (check, None)
         
         DCALL_IMM_x0 = (check, None)
         DCALL_MUT_x1 = (check, None)
         DCALL_OUT_x1 = (check, None)
 
-        def _init(self, **cnfg):
-            pass
+        def _init(self, x0):
+            self.x0 = x0
 
         def _call(self, x0, x1):
             return dict(x1=x1)
-    a = A()
+    x0 = [0,1,2]
+    a = A(**{A.DINIT_x0: x0})
+    assert a.x0 == x0
     x0 = [0,1,2]
     x1 = [1,2,3]
     out = a(**{
@@ -404,13 +410,27 @@ def test_11():
     assert out[A.DCALL_OUT_x1] == x1
 
 
+def test_13():
+    class A(Transform):
+        DCALL_IMM_key0 = (None, None)
+    
+    class B(Transform):
+        DCALL_IMM_key0 = A.DCALL_IMM_key0
+    
+    try:
+        class B(Transform):
+            DCALL_IMM_key1 = A.DCALL_IMM_key0
+    except Exception: pass
+    else: raise
+
+
 def wrap_test(test):
     try:
         test()
         return 0
     except Exception as e:
         print(f'ERROR in {test.__name__}')
-        print(e)
+        print(type(e), e)
     return 1
 
 

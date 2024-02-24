@@ -44,7 +44,7 @@ class TransformCall:
 class InitPipe(TransformInit):
     def __init__(self, **cnfg):
         # init_DecsFromTupleToDec(self, TransformInit._DECS_INIT_STARTSWITH)
-        cnfg_keys_checker = DecsChecker(decs=getattr(self, 'decs_'+self._DEC_TEMPLATE_DINIT), check_values=True, use_default_values=True)
+        cnfg_keys_checker = DecsChecker(decs=getattr(self, 'decs_'+self._DEC_TEMPLATE_DINIT), check_values=True, use_default_values=True, deepcopy_checked_values=False)
         cnfg, cnfg_external = cnfg_keys_checker(**cnfg)
         assert set(cnfg_external.keys()) == set(), f"""All init keys should be defined as {self._DEC_TEMPLATE_DINIT}_.
 These keys are not defined: {cnfg_external.keys()}."""
@@ -56,8 +56,8 @@ class _CallPipe(TransformCall):
         self._check_call_decs_intersection(keys_call_imm, keys_call_mut, keys_call_out)
 
         self.__call_keys_checker = DecsChecker(decs=set(keys_call_imm) | set(keys_call_mut), check_values=False, use_default_values=True)
-        self.__call_mut_keys_checker = DecsChecker(decs=keys_call_mut, check_values=True, use_default_values=False)
-        self.__call_out_keys_checker = DecsChecker(decs=keys_call_out, check_values=True, use_default_values=True)
+        self.__call_mut_keys_checker = DecsChecker(decs=keys_call_mut, check_values=True, use_default_values=False, deepcopy_checked_values=True)
+        self.__call_out_keys_checker = DecsChecker(decs=keys_call_out, check_values=True, use_default_values=True, deepcopy_checked_values=True)
         super().__init__()
 
     def __call__(self, **data):
@@ -141,6 +141,7 @@ def get_DecsFromTupleToDec():
                     if attr_name.startswith(template_startswith):
                         v = getattr(cls, attr_name)
                         if isinstance(v, Dec):
+                            assert attr_name[len(template_startswith):] == v, f"{attr_name} != {v} for cls {cls}"
                             dec = v
                         else:
                             assert isinstance(v, tuple), f"{attr_name}: {v}"
@@ -175,7 +176,10 @@ class Transform(
     when initing, DINIT_example becomes 'example' string for cnfg for __init__(self, **cnfg)
     similarly with the __call__(self, **data)
 
-    Does not check DCALL_IMM keys !
+    DINIT keys checked without copying
+    DCALL_IMM keys does not checked 
+    DCALL_MUT keys are checked
+    DCALL_OUT keys are checked
 
     to implement:
     _init(self, **cnfg)
