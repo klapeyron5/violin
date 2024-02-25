@@ -81,7 +81,7 @@ class Dec(str):
 
 
 class DecsChecker:
-    def __init__(self, decs: set, check_values=True, use_default_values=False, deepcopy_checked_values=False):  # TODO
+    def __init__(self, decs: set, check_values=True, use_default_values=False, deepcopy_checked_values=False):
         assert isinstance(decs, set)
         assert all([isinstance(x, Dec) for x in decs])
         self.decs = decs
@@ -89,7 +89,7 @@ class DecsChecker:
         if deepcopy_checked_values:
             self.__class__._f2 = self._f2_1
         else:
-            self.__class__._f2 = self._f2_1
+            self.__class__._f2 = self._f2_0
 
         if check_values and use_default_values:
             self._decs_process = self._f3

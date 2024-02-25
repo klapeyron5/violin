@@ -398,8 +398,8 @@ def test_12():
         def _call(self, x0, x1):
             return dict(x1=x1)
     x0 = [0,1,2]
-    a = A(**{A.DINIT_x0: x0})
-    assert a.x0 == x0
+    a = A(**{A.DINIT_x0: deepcopy(x0)})
+    assert a.x0 == x0+[113,]
     x0 = [0,1,2]
     x1 = [1,2,3]
     out = a(**{
