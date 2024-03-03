@@ -245,7 +245,7 @@ def test_7():
             InputValue(),
         ],
     })
-    out = tp()
+    out = tp()  # default value
     assert out['main_value'] == 0
 
 def test_8():
@@ -422,6 +422,32 @@ def test_13():
             DCALL_IMM_key1 = A.DCALL_IMM_key0
     except Exception: pass
     else: raise
+
+
+def test_14():
+    # test default value exception traceback
+    def check_main_value(x):
+        assert -1<=x<=1
+    
+    def default_value():
+        raise Exception('hello')
+
+    class InputValue(Transform):
+        DCALL_MUT_main_value = (check_main_value, default_value)
+        DCALL_OUT_main_value = DCALL_MUT_main_value
+
+        def _init(self, **config):
+            pass
+        def _call(self, **data):
+            return data
+    
+    tp = InputValue()
+    try:
+        out = tp()
+    except Exception as e:
+        print()
+    else:
+        raise Exception
 
 
 def wrap_test(test):

@@ -1,10 +1,7 @@
 from copy import deepcopy
 import inspect, re
-from .static_declaration import dec_generator, Dec, DecsChecker
-
-
-# class ViolinException(Exception):
-#     pass
+from violin.static_declaration import dec_generator, Dec, DecsChecker
+from violin.exception import ViolinException, DecDefaultException
 
 
 class TransformInit:
@@ -61,11 +58,19 @@ class _CallPipe(TransformCall):
         super().__init__()
 
     def __call__(self, **data):
-        data, data_call_imm, data_call_mut = self._before(data)
+        try:
+            data, data_call_imm, data_call_mut = self._before(data)
+        except DecDefaultException as e:
+            raise DecDefaultException(parent=self, dec=e.dec, e=e.e)
         for k in data_call_imm:
             data_call_mut[k] = deepcopy(data_call_imm[k])
+        
         data_out = super().__call__(**data_call_mut)
-        data = self._after(data, data_call_imm, data_out)
+
+        try:
+            data = self._after(data, data_call_imm, data_out)
+        except DecDefaultException as e:
+            raise DecDefaultException()
         return data
 
     def _before(self, data):
