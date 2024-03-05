@@ -1,7 +1,7 @@
 from copy import deepcopy
 import inspect, re
 from violin.static_declaration import dec_generator, Dec, DecsChecker
-from violin.exception import ViolinException, DecDefaultException
+from violin.exception import ViolinException, DecDefaultException, DecCheckException, DecsFlowException
 
 
 class TransformInit:
@@ -62,15 +62,23 @@ class _CallPipe(TransformCall):
             data, data_call_imm, data_call_mut = self._before(data)
         except DecDefaultException as e:
             raise DecDefaultException(parent=self, dec=e.dec, e=e.e)
-        for k in data_call_imm:
-            data_call_mut[k] = deepcopy(data_call_imm[k])
+        except DecCheckException as e:
+            raise DecCheckException(parent=self, dec=e.dec, e=e.e)
         
+        try:
+            for k in data_call_imm:
+                data_call_mut[k] = deepcopy(data_call_imm[k])
+        except ViolinException as e:
+            pass # cant deepcopy an object for DCALL_IMM
+
         data_out = super().__call__(**data_call_mut)
 
         try:
             data = self._after(data, data_call_imm, data_out)
         except DecDefaultException as e:
-            raise DecDefaultException()
+            raise DecDefaultException(parent=self, dec=e.dec, e=e.e)
+        except DecCheckException as e:
+            raise DecCheckException(parent=self, dec=e.dec, e=e.e)
         return data
 
     def _before(self, data):
@@ -79,21 +87,25 @@ class _CallPipe(TransformCall):
                 print(x)
                 assert False
 
-        data_call, data_ext = self.__call_keys_checker(**data)
-        intersection_call_ext = set(data_call.keys()) & set(data_ext.keys())
-        assert intersection_call_ext == set(), "There is intersection between external and call data: {}".format(intersection_call_ext)
-        assert set(data.keys()) - (set(data_call.keys()) | set(data_ext.keys())) == set()
+        try:
+            data_call, data_ext = self.__call_keys_checker(**data)
+        except DecsFlowException as e:
+            raise DecsFlowException(not_matched_data_keys=e.not_matched_data_keys, data_keys=e.data_keys, decs=e.decs, flow_stage='before call; input keys vs call keys', transform=self)
         data = data_ext
 
-        data_call_mut, data_call_imm = self.__call_mut_keys_checker(**data_call)
-        assert set(data_call_mut.keys()) & set(data_call_imm.keys()) == set()  # TODO delete
-        assert set(data_call_mut.keys()) | set(data_call_imm.keys()) == set(data_call.keys())  # TODO delete
+        try:
+            data_call_mut, data_call_imm = self.__call_mut_keys_checker(**data_call)
+        except DecsFlowException as e:
+            raise DecsFlowException(not_matched_data_keys=e.not_matched_data_keys, data_keys=e.data_keys, decs=e.decs, flow_stage='before call; imm vs mut call keys', transform=self)
         return data, data_call_imm, data_call_mut
 
     def _after(self, data, data_call_imm, data_call_out):
-        data_call_out, _data = self.__call_out_keys_checker(**data_call_out)
-        assert len(_data.keys()) == 0, f"Check returned keys for {self}; These keys are not declared as DCALL_OUT: {_data.keys()}"
-        assert set(data_call_out.keys()) & set(data_call_imm.keys()) == set()  # TODO delete
+        try:
+            data_call_out, _data = self.__call_out_keys_checker(**data_call_out)
+        except DecsFlowException as e:
+            raise DecsFlowException(not_matched_data_keys=e.not_matched_data_keys, data_keys=e.data_keys, decs=e.decs, flow_stage='after call; out call keys', transform=self)
+        if len(_data) != 0:
+            raise DecsFlowException(not_matched_data_keys=_data, data_keys=data_call_out, decs=self.__call_out_keys_checker.decs, flow_stage='after call; out call keys', transform=self)
         common_keys = set(data_call_out.keys()) & set(data.keys())
         assert common_keys == set(), f'Common keys: {common_keys}'
         data.update(data_call_imm)

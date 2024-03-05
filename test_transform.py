@@ -2,6 +2,7 @@ from violin import Transform, TransformPipeline
 from violin import static_declaration
 from copy import deepcopy
 from violin import checkers as vch
+from violin.exception import DecDefaultException, DecCheckException
 
 
 def test_0():
@@ -444,7 +445,7 @@ def test_14():
     tp = InputValue()
     try:
         out = tp()
-    except Exception as e:
+    except DecDefaultException as e:
         print()
     else:
         raise Exception
@@ -456,7 +457,8 @@ def wrap_test(test):
         return 0
     except Exception as e:
         print(f'ERROR in {test.__name__}')
-        print(type(e), e)
+        print('Exception type:', type(e))
+        print('Exception txt:', str(e))
     return 1
 
 
@@ -480,6 +482,6 @@ def main():
     print(f'{failed_i}/{all_i} tests failed')
     print(__file__)
     if failed_i != 0:
-        raise Exception('Tests failed!')
+        raise Exception('Tests failed!') from None
     else:
         print('Tests passed!')

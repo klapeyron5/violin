@@ -3,7 +3,7 @@
 # default_value is not necessary
 import inspect, re
 from copy import deepcopy
-from violin.exception import DecCheckException, DecDefaultException
+from violin.exception import DecCheckException, DecDefaultException, DecsFlowException
 
 
 def get_function_arguments(f):
@@ -41,7 +41,7 @@ class Dec(str):
         try:
             self._value_checker(x)
         except Exception as e:
-            raise DecCheckException from e
+            raise DecCheckException(parent=None, dec=self, e=e)
     
     def get_default_value(self):
         try:
@@ -62,7 +62,7 @@ class Dec(str):
             dec_key = dec_key[len(dec_key_template_startswith):]
             assert re.match('^'+cls.RE_TEMPLATE_NAME, dec_key) is not None
             return dec_key
-    
+
     class DecVal:
         @classmethod
         def preproc(cls, dec_val):
@@ -119,20 +119,17 @@ class DecsChecker:
         data_internal, data_external = {}, {}
         for k in self.decs:
             try:
-                assert isinstance(k, Dec)
                 self._decs_process(k, data)
-                data_internal[k] = data[k]
-                del data[k]
             except DecDefaultException as e:
                 raise e
+            except DecCheckException as e:
+                raise e
+            
+            try:
+                data_internal[k] = data[k]
+                del data[k]
             except KeyError:
-                errmsg = f"""ERROR: {k} not in kwargs
-self.decs: {[str(x) for x in self.decs]}
-kwargs.keys(): {data.keys()}
-"""
-                raise KeyError(errmsg)
-            except Exception as e:
-                raise Exception(f"{str(e)}\nDecKey: {k}.")
+                raise DecsFlowException(not_matched_data_keys=(k,), data_keys=list(data.keys()), decs=self.decs)
         data_external = data
         return data_internal, data_external
 
