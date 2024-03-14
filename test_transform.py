@@ -1,8 +1,9 @@
 from violin import Transform, TransformPipeline
 from violin import static_declaration
 from copy import deepcopy
+import traceback
 from violin import checkers as vch
-from violin.exception import DecDefaultException, DecCheckException
+from violin.exception import DecDefaultException, DecCheckException, ViolinException
 
 
 def test_0():
@@ -91,7 +92,7 @@ def test_4():
         pass
     try: 
         B(**{B.DINIT_smth: 0})
-    except NotImplementedError: 
+    except ViolinException: # TODO specify exception
         pass
     else: 
         raise
@@ -102,7 +103,7 @@ def test_4():
     b = B(**{B.DINIT_smth: 0})
     try:
         b(**{B.DCALL_IMM_smth: 0})
-    except NotImplementedError: pass
+    except ViolinException: pass # TODO specify exception
     else: raise
 
     class B(A):
@@ -459,6 +460,7 @@ def wrap_test(test):
         print(f'ERROR in {test.__name__}')
         print('Exception type:', type(e))
         print('Exception txt:', str(e))
+        # print('traceback:', traceback.print_exc())
     return 1
 
 

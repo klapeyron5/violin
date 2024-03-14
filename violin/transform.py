@@ -12,7 +12,7 @@ class TransformInit:
         self._init(**cnfg)
     def _init(self, **cnfg):
         # raise ViolinException
-        raise NotImplementedError
+        raise ViolinException('Not implemented _init')
 
 
 class TransformCall:
@@ -24,7 +24,7 @@ class TransformCall:
     def __call__(self, **data):
         return self._call(**data)
     def _call(self, **data):
-        raise NotImplementedError
+        raise ViolinException('Not implemented _call')
     
     @staticmethod
     def _check_call_decs_intersection(keys_call_imm, keys_call_mut, keys_call_out):
@@ -55,6 +55,14 @@ class _CallPipe(TransformCall):
         self.__call_keys_checker = DecsChecker(decs=set(keys_call_imm) | set(keys_call_mut), check_values=False, use_default_values=True)
         self.__call_mut_keys_checker = DecsChecker(decs=keys_call_mut, check_values=True, use_default_values=False, deepcopy_checked_values=True)
         self.__call_out_keys_checker = DecsChecker(decs=keys_call_out, check_values=True, use_default_values=True, deepcopy_checked_values=True)
+
+        self.__call_keys_checker = self._keys_checker_wrapper(
+            self.__call_keys_checker, stage_name='before call; input keys vs call keys')
+        self.__call_mut_keys_checker = self._keys_checker_wrapper(
+            self.__call_mut_keys_checker, stage_name='before call; imm vs mut call keys')
+        self.__call_out_keys_checker = self._keys_checker_wrapper(
+            self.__call_out_keys_checker, stage_name='after call; out call keys')
+
         super().__init__()
 
     def __call__(self, **data):
@@ -68,10 +76,13 @@ class _CallPipe(TransformCall):
         try:
             for k in data_call_imm:
                 data_call_mut[k] = deepcopy(data_call_imm[k])
-        except ViolinException as e:
-            pass # cant deepcopy an object for DCALL_IMM
+        except Exception as e:
+            raise ViolinException('cant deepcopy an object for DCALL_IMM')
 
-        data_out = super().__call__(**data_call_mut)
+        try:
+            data_out = super().__call__(**data_call_mut)
+        except Exception as e:
+            raise e
 
         try:
             data = self._after(data, data_call_imm, data_out)
@@ -81,29 +92,37 @@ class _CallPipe(TransformCall):
             raise DecCheckException(parent=self, dec=e.dec, e=e.e)
         return data
 
+    def _keys_checker_wrapper(self, keys_checker, stage_name):
+        def body(**data):
+            try:
+                data_inn, data_ext = keys_checker(**data)
+            except TypeError as e:
+                # data_call_out is not a dict
+                raise DecsFlowException(
+                    not_matched_data_keys=keys_checker.decs,
+                    data_keys='Not a dict',
+                    decs=keys_checker.decs,
+                    flow_stage=stage_name, 
+                    transform=self)
+            except DecsFlowException as e:
+                raise DecsFlowException(
+                    not_matched_data_keys=e.not_matched_data_keys, 
+                    data_keys=e.data_keys, decs=e.decs, flow_stage=stage_name, transform=self)
+            return data_inn, data_ext
+        return body
+
     def _before(self, data):
         for x in data.keys():
             if not isinstance(x, str):
                 print(x)
                 assert False
-
-        try:
-            data_call, data_ext = self.__call_keys_checker(**data)
-        except DecsFlowException as e:
-            raise DecsFlowException(not_matched_data_keys=e.not_matched_data_keys, data_keys=e.data_keys, decs=e.decs, flow_stage='before call; input keys vs call keys', transform=self)
+        data_call, data_ext = self.__call_keys_checker(**data)
         data = data_ext
-
-        try:
-            data_call_mut, data_call_imm = self.__call_mut_keys_checker(**data_call)
-        except DecsFlowException as e:
-            raise DecsFlowException(not_matched_data_keys=e.not_matched_data_keys, data_keys=e.data_keys, decs=e.decs, flow_stage='before call; imm vs mut call keys', transform=self)
+        data_call_mut, data_call_imm = self.__call_mut_keys_checker(**data_call)
         return data, data_call_imm, data_call_mut
 
     def _after(self, data, data_call_imm, data_call_out):
-        try:
-            data_call_out, _data = self.__call_out_keys_checker(**data_call_out)
-        except DecsFlowException as e:
-            raise DecsFlowException(not_matched_data_keys=e.not_matched_data_keys, data_keys=e.data_keys, decs=e.decs, flow_stage='after call; out call keys', transform=self)
+        data_call_out, _data = self.__call_out_keys_checker(**data_call_out)
         if len(_data) != 0:
             raise DecsFlowException(not_matched_data_keys=_data, data_keys=data_call_out, decs=self.__call_out_keys_checker.decs, flow_stage='after call; out call keys', transform=self)
         common_keys = set(data_call_out.keys()) & set(data.keys())
@@ -193,10 +212,10 @@ class Transform(
     when initing, DINIT_example becomes 'example' string for cnfg for __init__(self, **cnfg)
     similarly with the __call__(self, **data)
 
-    DINIT keys checked without copying
-    DCALL_IMM keys does not checked 
-    DCALL_MUT keys are checked
-    DCALL_OUT keys are checked
+    DINIT keys:     check_values=True, use_default_values=True, deepcopy_checked_values=Fals
+    DCALL_IMM keys: check_values=Fals, use_default_values=True
+    DCALL_MUT keys: check_values=True, use_default_values=True, deepcopy_checked_values=True
+    DCALL_OUT keys: check_values=True, use_default_values=True, deepcopy_checked_values=True
 
     to implement:
     _init(self, **cnfg)
