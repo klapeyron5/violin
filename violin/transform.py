@@ -7,7 +7,6 @@ from violin.exception import ViolinException, DecDefaultException, DecCheckExcep
 class TransformInit:
     _DEC_TEMPLATE_DINIT_ = 'DINIT_'
     _DECS_TEMPLATES_DINIT_ = (_DEC_TEMPLATE_DINIT_,)  # TODO intersection with other _DECS
-    # _DECS_INIT_STARTSWITH = tuple(x+'_' for x in _DECS_INIT)
     def __init__(self, **cnfg):
         self._init(**cnfg)
     def _init(self, **cnfg):
@@ -20,14 +19,13 @@ class TransformCall:
     _DEC_TEMPLATE_DCALL_MUT_ = 'DCALL_MUT_'
     _DEC_TEMPLATE_DCALL_OUT_ = 'DCALL_OUT_'
     _DECS_TEMPLATES_DCALL_ = (_DEC_TEMPLATE_DCALL_IMM_, _DEC_TEMPLATE_DCALL_MUT_, _DEC_TEMPLATE_DCALL_OUT_)  # TODO intersection with other _DECS
-    # _DECS_CALL_STARTSWITH = tuple(x+'_' for x in _DECS_CALL)
     def __call__(self, **data):
         return self._call(**data)
     def _call(self, **data):
         raise ViolinException('Not implemented _call')
     
     @staticmethod
-    def _check_call_decs_intersection(keys_call_imm, keys_call_mut, keys_call_out):
+    def _check_call_decs(keys_call_imm, keys_call_mut, keys_call_out):
         args = [keys_call_imm, keys_call_mut, keys_call_out]
         assert all([isinstance(s, set) for s in args])
         assert all([all([isinstance(x, str) for x in s]) for s in args])
@@ -40,7 +38,6 @@ class TransformCall:
 
 class InitPipe(TransformInit):
     def __init__(self, **cnfg):
-        # init_DecsFromTupleToDec(self, TransformInit._DECS_INIT_STARTSWITH)
         cnfg_keys_checker = DecsChecker(decs=getattr(self, 'decs_'+self._DEC_TEMPLATE_DINIT_), check_values=True, use_default_values=True, deepcopy_checked_values=False)
         cnfg, cnfg_external = cnfg_keys_checker(**cnfg)
         assert set(cnfg_external.keys()) == set(), f"""All init keys should be defined as {self._DEC_TEMPLATE_DINIT}_.
@@ -50,7 +47,7 @@ These keys are not defined: {cnfg_external.keys()}."""
 
 class _CallPipe(TransformCall):
     def __init__(self, keys_call_imm, keys_call_mut, keys_call_out):
-        self._check_call_decs_intersection(keys_call_imm, keys_call_mut, keys_call_out)
+        self._check_call_decs(keys_call_imm, keys_call_mut, keys_call_out)
 
         self.__call_keys_checker = DecsChecker(decs=set(keys_call_imm) | set(keys_call_mut), check_values=False, use_default_values=True)
         self.__call_mut_keys_checker = DecsChecker(decs=keys_call_mut, check_values=True, use_default_values=False, deepcopy_checked_values=True)
@@ -135,7 +132,6 @@ class _CallPipe(TransformCall):
 
 class CallPipe(_CallPipe):
     def __init__(self):
-        # init_DecsFromTupleToDec(self, TransformCall._DECS_CALL_STARTSWITH)
         super().__init__(
             keys_call_imm=getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_IMM_),
             keys_call_mut=getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_MUT_),
@@ -166,12 +162,11 @@ def get_DecsFromTupleToDec():
         return func
 
     class DecsFromTupleToDec(type):
-        TEMPLATES_STARTSWITH = templates_startswith
+        __TEMPLATES_STARTSWITH = templates_startswith
 
         def __init__(cls, name, bases, attrs):
-            for template_startswith in cls.TEMPLATES_STARTSWITH:
+            for template_startswith in cls.__TEMPLATES_STARTSWITH:
                 decs = set()
-                # for attr_name in get_decs_attrnames_in_order(cls, template_startswith):
                 for attr_info in inspect.getmembers(cls):
                     attr_name = attr_info[0]
                     if attr_name.startswith(template_startswith):
@@ -187,7 +182,16 @@ def get_DecsFromTupleToDec():
                         setattr(cls, attr_name, dec)
                         decs.add(dec)
                 setattr(cls, 'decs_'+template_startswith, decs)
-            TransformCall._check_call_decs_intersection(*[getattr(cls, 'decs_'+d) for d in TransformCall._DECS_TEMPLATES_DCALL_])
+            try:
+                TransformCall._check_call_decs(*[getattr(cls, 'decs_'+d) for d in TransformCall._DECS_TEMPLATES_DCALL_])
+            except DecsFlowException as e:
+                raise DecsFlowException(
+                    not_matched_data_keys=None,
+                    data_keys=None,
+                    decs=None,
+                    flow_stage='Transform meta; call keys',
+                    transform=cls,
+                )
 
     return DecsFromTupleToDec
 
