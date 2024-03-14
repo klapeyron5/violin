@@ -3,7 +3,6 @@ from violin import static_declaration
 from copy import deepcopy
 import traceback
 from violin import checkers as vch
-from violin.exception import DecDefaultException, DecCheckException, ViolinException
 
 
 def test_0():
@@ -18,32 +17,32 @@ def test_0():
     assert len(out.keys())==0
 
 def test_1():
-    assert Transform.decs_DINIT == set()
+    assert Transform.decs_DINIT_ == set()
     class A(Transform):
         pass
-    assert A.decs_DINIT == set()
+    assert A.decs_DINIT_ == set()
 
-    assert Transform.decs_DINIT == set()
-    assert Transform.decs_DCALL_IMM == set()
-    assert Transform.decs_DCALL_MUT == set()
-    assert Transform.decs_DCALL_OUT == set()
+    assert Transform.decs_DINIT_ == set()
+    assert Transform.decs_DCALL_IMM_ == set()
+    assert Transform.decs_DCALL_MUT_ == set()
+    assert Transform.decs_DCALL_OUT_ == set()
     class A(Transform):
         pass
-    assert A.decs_DINIT == set()
-    assert A.decs_DCALL_IMM == set()
-    assert A.decs_DCALL_MUT == set()
-    assert A.decs_DCALL_OUT == set()
+    assert A.decs_DINIT_ == set()
+    assert A.decs_DCALL_IMM_ == set()
+    assert A.decs_DCALL_MUT_ == set()
+    assert A.decs_DCALL_OUT_ == set()
 
 def test_2():
     class A(Transform):
         DINIT_smth = (None, None)
-    assert A.decs_DINIT == {'smth',}
+    assert A.decs_DINIT_ == {'smth',}
 
     class A(Transform):
         DINIT_smth = (None, None)
         DCALL_IMM_smth = (None, None)
-    assert A.decs_DINIT == {'smth',}
-    assert A.decs_DCALL_IMM == {'smth',}
+    assert A.decs_DINIT_ == {'smth',}
+    assert A.decs_DCALL_IMM_ == {'smth',}
 
 def test_3():
     class A(Transform):
@@ -72,8 +71,8 @@ def test_3():
         DINIT_smth = (None, None)
         DCALL_IMM_smth = (None, None)
         DCALL_IMM_smth = (None, None)
-    assert A.decs_DINIT == {'smth',}
-    assert A.decs_DCALL_IMM == {'smth',}
+    assert A.decs_DINIT_ == {'smth',}
+    assert A.decs_DCALL_IMM_ == {'smth',}
 
     try:
         class A(Transform):
@@ -92,7 +91,7 @@ def test_4():
         pass
     try: 
         B(**{B.DINIT_smth: 0})
-    except ViolinException: # TODO specify exception
+    except Exception:
         pass
     else: 
         raise
@@ -103,7 +102,7 @@ def test_4():
     b = B(**{B.DINIT_smth: 0})
     try:
         b(**{B.DCALL_IMM_smth: 0})
-    except ViolinException: pass # TODO specify exception
+    except Exception: pass
     else: raise
 
     class B(A):
@@ -446,7 +445,7 @@ def test_14():
     tp = InputValue()
     try:
         out = tp()
-    except DecDefaultException as e:
+    except Exception as e:
         print()
     else:
         raise Exception

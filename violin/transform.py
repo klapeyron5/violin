@@ -5,9 +5,9 @@ from violin.exception import ViolinException, DecDefaultException, DecCheckExcep
 
 
 class TransformInit:
-    _DEC_TEMPLATE_DINIT = 'DINIT'
-    _DECS_INIT = (_DEC_TEMPLATE_DINIT,)  # TODO intersection with other _DECS
-    _DECS_INIT_STARTSWITH = tuple(x+'_' for x in _DECS_INIT)
+    _DEC_TEMPLATE_DINIT_ = 'DINIT_'
+    _DECS_TEMPLATES_DINIT_ = (_DEC_TEMPLATE_DINIT_,)  # TODO intersection with other _DECS
+    # _DECS_INIT_STARTSWITH = tuple(x+'_' for x in _DECS_INIT)
     def __init__(self, **cnfg):
         self._init(**cnfg)
     def _init(self, **cnfg):
@@ -16,11 +16,11 @@ class TransformInit:
 
 
 class TransformCall:
-    _DEC_TEMPLATE_DCALL_IMM = 'DCALL_IMM'
-    _DEC_TEMPLATE_DCALL_MUT = 'DCALL_MUT'
-    _DEC_TEMPLATE_DCALL_OUT = 'DCALL_OUT'
-    _DECS_CALL = (_DEC_TEMPLATE_DCALL_IMM, _DEC_TEMPLATE_DCALL_MUT, _DEC_TEMPLATE_DCALL_OUT)  # TODO intersection with other _DECS
-    _DECS_CALL_STARTSWITH = tuple(x+'_' for x in _DECS_CALL)
+    _DEC_TEMPLATE_DCALL_IMM_ = 'DCALL_IMM_'
+    _DEC_TEMPLATE_DCALL_MUT_ = 'DCALL_MUT_'
+    _DEC_TEMPLATE_DCALL_OUT_ = 'DCALL_OUT_'
+    _DECS_TEMPLATES_DCALL_ = (_DEC_TEMPLATE_DCALL_IMM_, _DEC_TEMPLATE_DCALL_MUT_, _DEC_TEMPLATE_DCALL_OUT_)  # TODO intersection with other _DECS
+    # _DECS_CALL_STARTSWITH = tuple(x+'_' for x in _DECS_CALL)
     def __call__(self, **data):
         return self._call(**data)
     def _call(self, **data):
@@ -41,7 +41,7 @@ class TransformCall:
 class InitPipe(TransformInit):
     def __init__(self, **cnfg):
         # init_DecsFromTupleToDec(self, TransformInit._DECS_INIT_STARTSWITH)
-        cnfg_keys_checker = DecsChecker(decs=getattr(self, 'decs_'+self._DEC_TEMPLATE_DINIT), check_values=True, use_default_values=True, deepcopy_checked_values=False)
+        cnfg_keys_checker = DecsChecker(decs=getattr(self, 'decs_'+self._DEC_TEMPLATE_DINIT_), check_values=True, use_default_values=True, deepcopy_checked_values=False)
         cnfg, cnfg_external = cnfg_keys_checker(**cnfg)
         assert set(cnfg_external.keys()) == set(), f"""All init keys should be defined as {self._DEC_TEMPLATE_DINIT}_.
 These keys are not defined: {cnfg_external.keys()}."""
@@ -137,14 +137,14 @@ class CallPipe(_CallPipe):
     def __init__(self):
         # init_DecsFromTupleToDec(self, TransformCall._DECS_CALL_STARTSWITH)
         super().__init__(
-            keys_call_imm=getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_IMM),
-            keys_call_mut=getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_MUT),
-            keys_call_out=getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_OUT),
+            keys_call_imm=getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_IMM_),
+            keys_call_mut=getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_MUT_),
+            keys_call_out=getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_OUT_),
         )
 
 
 def get_DecsFromTupleToDec():
-    templates_startswith = TransformInit._DECS_INIT_STARTSWITH+TransformCall._DECS_CALL_STARTSWITH
+    templates_startswith = TransformInit._DECS_TEMPLATES_DINIT_+TransformCall._DECS_TEMPLATES_DCALL_
     assert isinstance(templates_startswith, tuple), templates_startswith
     assert all([re.match(Dec.DecKey.RE_TEMPLATE_STARTSWITH, x) is not None for x in templates_startswith]), templates_startswith
 
@@ -186,8 +186,8 @@ def get_DecsFromTupleToDec():
                             dec = dec_generator(attr_name, template_startswith, v)
                         setattr(cls, attr_name, dec)
                         decs.add(dec)
-                setattr(cls, 'decs_'+template_startswith[:-1], decs)
-            TransformCall._check_call_decs_intersection(*[getattr(cls, 'decs_'+d) for d in TransformCall._DECS_CALL])
+                setattr(cls, 'decs_'+template_startswith, decs)
+            TransformCall._check_call_decs_intersection(*[getattr(cls, 'decs_'+d) for d in TransformCall._DECS_TEMPLATES_DCALL_])
 
     return DecsFromTupleToDec
 
@@ -221,6 +221,11 @@ class Transform(
     _init(self, **cnfg)
     _call(self, **data)
     """
+    decs_DINIT_ = None
+    decs_DCALL_IMM_ = None
+    decs_DCALL_MUT_ = None
+    decs_DCALL_OUT_ = None
+
     def __init__(self, **cnfg):
         # try:
         InitPipe.__init__(self, **cnfg)
