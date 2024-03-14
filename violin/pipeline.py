@@ -18,9 +18,9 @@ class TransformPipeline(Transform):
         DCALL_MUT = set()
         DCALL_OUT = set()
         for t in self._transforms:
-            DCALL_IMM = DCALL_IMM | t.decs_DCALL_IMM
-            DCALL_MUT = DCALL_MUT | t.decs_DCALL_MUT
-            DCALL_OUT = DCALL_OUT | t.decs_DCALL_OUT
+            DCALL_IMM = DCALL_IMM | t.decs_DCALL_IMM_
+            DCALL_MUT = DCALL_MUT | t.decs_DCALL_MUT_
+            DCALL_OUT = DCALL_OUT | t.decs_DCALL_OUT_
         DCALL_IMM = DCALL_IMM - DCALL_MUT
         DCALL_IMM = DCALL_IMM - DCALL_OUT
         return DCALL_IMM, DCALL_MUT, DCALL_OUT
@@ -29,7 +29,7 @@ class TransformPipeline(Transform):
         InitPipe.__init__(self, **cnfg)
         
         for tmplt, decs in zip([
-            self._DEC_TEMPLATE_DCALL_IMM, self._DEC_TEMPLATE_DCALL_MUT, self._DEC_TEMPLATE_DCALL_OUT],
+            self._DEC_TEMPLATE_DCALL_IMM_, self._DEC_TEMPLATE_DCALL_MUT_, self._DEC_TEMPLATE_DCALL_OUT_],
             self.get_dataflow()):
             setattr(self, 'decs_'+tmplt, decs)
             for dec in decs:
@@ -42,6 +42,6 @@ class TransformPipeline(Transform):
     def _call(self, **data):
         for op in self._transforms:
             data = op(**data)
-        for imm_key in self.decs_DCALL_IMM:
+        for imm_key in self.decs_DCALL_IMM_:
             del data[imm_key]
         return data

@@ -3,6 +3,7 @@
 # default_value is not necessary
 import inspect, re
 from copy import deepcopy
+from violin.exception import DecCheckException, DecDefaultException, DecsFlowException
 
 
 def get_function_arguments(f):
@@ -34,8 +35,20 @@ class Dec(str):
         return instance
     
     def __init__(self, dec_key, dec_val):
-        self.value_checker, self.default_value = self.DecVal.preproc(dec_val)
+        self._value_checker, self._default_value = self.DecVal.preproc(dec_val)
     
+    def check_value(self, x):
+        try:
+            self._value_checker(x)
+        except Exception as e:
+            raise DecCheckException(parent=None, dec=self, e=e)
+    
+    def get_default_value(self):
+        try:
+            return self._default_value()
+        except Exception as e:
+            raise DecDefaultException(parent=None, dec=self, e=e)
+
     class DecKey:
         PREFIX = 'D'
         RE_TEMPLATE_STARTSWITH = '^'+PREFIX+'[A-Z0-9]{1,}_([A-Z0-9]{1,}_){0,}'
@@ -49,7 +62,7 @@ class Dec(str):
             dec_key = dec_key[len(dec_key_template_startswith):]
             assert re.match('^'+cls.RE_TEMPLATE_NAME, dec_key) is not None
             return dec_key
-    
+
     class DecVal:
         @classmethod
         def preproc(cls, dec_val):
@@ -106,18 +119,17 @@ class DecsChecker:
         data_internal, data_external = {}, {}
         for k in self.decs:
             try:
-                assert isinstance(k, Dec)
                 self._decs_process(k, data)
+            except DecDefaultException as e:
+                raise e
+            except DecCheckException as e:
+                raise e
+            
+            try:
                 data_internal[k] = data[k]
                 del data[k]
             except KeyError:
-                errmsg = f"""ERROR: {k} not in kwargs
-self.decs: {[str(x) for x in self.decs]}
-kwargs.keys(): {data.keys()}
-"""
-                raise KeyError(errmsg)
-            except Exception as e:
-                raise Exception(f"{str(e)}\nDecKey: {k}.")
+                raise DecsFlowException(not_matched_data_keys=(k,), data_keys=list(data.keys()), decs=self.decs)
         data_external = data
         return data_internal, data_external
 
@@ -127,16 +139,18 @@ kwargs.keys(): {data.keys()}
     @classmethod
     def _f1(cls, dec: Dec, data: dict):
         if dec not in data:
-            data[dec] = dec.default_value()
+            try:
+                data[dec] = dec.get_default_value()
+            except DecDefaultException as e:
+                raise e
             # cls._f2(dec, data)  # check default value
     @classmethod
     def _f2_0(cls, dec: Dec, data: dict):
-        dec.value_checker(data[dec])
+        dec.check_value(data[dec])
     @classmethod
     def _f2_1(cls, dec: Dec, data: dict):
-        dec.value_checker(deepcopy(data[dec]))
+        dec.check_value(deepcopy(data[dec]))
     @classmethod
     def _f3(cls, dec: Dec, data: dict):
-        if dec not in data:
-            data[dec] = dec.default_value()
+        cls._f1(dec, data)
         cls._f2(dec, data)

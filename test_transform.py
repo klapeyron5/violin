@@ -1,6 +1,7 @@
 from violin import Transform, TransformPipeline
 from violin import static_declaration
 from copy import deepcopy
+import traceback
 from violin import checkers as vch
 
 
@@ -16,32 +17,32 @@ def test_0():
     assert len(out.keys())==0
 
 def test_1():
-    assert Transform.decs_DINIT == set()
+    assert Transform.decs_DINIT_ == set()
     class A(Transform):
         pass
-    assert A.decs_DINIT == set()
+    assert A.decs_DINIT_ == set()
 
-    assert Transform.decs_DINIT == set()
-    assert Transform.decs_DCALL_IMM == set()
-    assert Transform.decs_DCALL_MUT == set()
-    assert Transform.decs_DCALL_OUT == set()
+    assert Transform.decs_DINIT_ == set()
+    assert Transform.decs_DCALL_IMM_ == set()
+    assert Transform.decs_DCALL_MUT_ == set()
+    assert Transform.decs_DCALL_OUT_ == set()
     class A(Transform):
         pass
-    assert A.decs_DINIT == set()
-    assert A.decs_DCALL_IMM == set()
-    assert A.decs_DCALL_MUT == set()
-    assert A.decs_DCALL_OUT == set()
+    assert A.decs_DINIT_ == set()
+    assert A.decs_DCALL_IMM_ == set()
+    assert A.decs_DCALL_MUT_ == set()
+    assert A.decs_DCALL_OUT_ == set()
 
 def test_2():
     class A(Transform):
         DINIT_smth = (None, None)
-    assert A.decs_DINIT == {'smth',}
+    assert A.decs_DINIT_ == {'smth',}
 
     class A(Transform):
         DINIT_smth = (None, None)
         DCALL_IMM_smth = (None, None)
-    assert A.decs_DINIT == {'smth',}
-    assert A.decs_DCALL_IMM == {'smth',}
+    assert A.decs_DINIT_ == {'smth',}
+    assert A.decs_DCALL_IMM_ == {'smth',}
 
 def test_3():
     class A(Transform):
@@ -70,8 +71,8 @@ def test_3():
         DINIT_smth = (None, None)
         DCALL_IMM_smth = (None, None)
         DCALL_IMM_smth = (None, None)
-    assert A.decs_DINIT == {'smth',}
-    assert A.decs_DCALL_IMM == {'smth',}
+    assert A.decs_DINIT_ == {'smth',}
+    assert A.decs_DCALL_IMM_ == {'smth',}
 
     try:
         class A(Transform):
@@ -90,7 +91,7 @@ def test_4():
         pass
     try: 
         B(**{B.DINIT_smth: 0})
-    except NotImplementedError: 
+    except Exception:
         pass
     else: 
         raise
@@ -101,7 +102,7 @@ def test_4():
     b = B(**{B.DINIT_smth: 0})
     try:
         b(**{B.DCALL_IMM_smth: 0})
-    except NotImplementedError: pass
+    except Exception: pass
     else: raise
 
     class B(A):
@@ -245,7 +246,7 @@ def test_7():
             InputValue(),
         ],
     })
-    out = tp()
+    out = tp()  # default value
     assert out['main_value'] == 0
 
 def test_8():
@@ -424,13 +425,41 @@ def test_13():
     else: raise
 
 
+def test_14():
+    # test default value exception traceback
+    def check_main_value(x):
+        assert -1<=x<=1
+    
+    def default_value():
+        raise Exception('hello')
+
+    class InputValue(Transform):
+        DCALL_MUT_main_value = (check_main_value, default_value)
+        DCALL_OUT_main_value = DCALL_MUT_main_value
+
+        def _init(self, **config):
+            pass
+        def _call(self, **data):
+            return data
+    
+    tp = InputValue()
+    try:
+        out = tp()
+    except Exception as e:
+        print()
+    else:
+        raise Exception
+
+
 def wrap_test(test):
     try:
         test()
         return 0
     except Exception as e:
         print(f'ERROR in {test.__name__}')
-        print(type(e), e)
+        print('Exception type:', type(e))
+        print('Exception txt:', str(e))
+        # print('traceback:', traceback.print_exc())
     return 1
 
 
@@ -454,6 +483,6 @@ def main():
     print(f'{failed_i}/{all_i} tests failed')
     print(__file__)
     if failed_i != 0:
-        raise Exception('Tests failed!')
+        raise Exception('Tests failed!') from None
     else:
         print('Tests passed!')

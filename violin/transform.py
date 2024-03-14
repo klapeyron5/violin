@@ -1,36 +1,31 @@
 from copy import deepcopy
 import inspect, re
-from .static_declaration import dec_generator, Dec, DecsChecker
-
-
-# class ViolinException(Exception):
-#     pass
+from violin.static_declaration import dec_generator, Dec, DecsChecker
+from violin.exception import ViolinException, DecDefaultException, DecCheckException, DecsFlowException
 
 
 class TransformInit:
-    _DEC_TEMPLATE_DINIT = 'DINIT'
-    _DECS_INIT = (_DEC_TEMPLATE_DINIT,)  # TODO intersection with other _DECS
-    _DECS_INIT_STARTSWITH = tuple(x+'_' for x in _DECS_INIT)
+    _DEC_TEMPLATE_DINIT_ = 'DINIT_'
+    _DECS_TEMPLATES_DINIT_ = (_DEC_TEMPLATE_DINIT_,)  # TODO intersection with other _DECS
     def __init__(self, **cnfg):
         self._init(**cnfg)
     def _init(self, **cnfg):
         # raise ViolinException
-        raise NotImplementedError
+        raise ViolinException('Not implemented _init')
 
 
 class TransformCall:
-    _DEC_TEMPLATE_DCALL_IMM = 'DCALL_IMM'
-    _DEC_TEMPLATE_DCALL_MUT = 'DCALL_MUT'
-    _DEC_TEMPLATE_DCALL_OUT = 'DCALL_OUT'
-    _DECS_CALL = (_DEC_TEMPLATE_DCALL_IMM, _DEC_TEMPLATE_DCALL_MUT, _DEC_TEMPLATE_DCALL_OUT)  # TODO intersection with other _DECS
-    _DECS_CALL_STARTSWITH = tuple(x+'_' for x in _DECS_CALL)
+    _DEC_TEMPLATE_DCALL_IMM_ = 'DCALL_IMM_'
+    _DEC_TEMPLATE_DCALL_MUT_ = 'DCALL_MUT_'
+    _DEC_TEMPLATE_DCALL_OUT_ = 'DCALL_OUT_'
+    _DECS_TEMPLATES_DCALL_ = (_DEC_TEMPLATE_DCALL_IMM_, _DEC_TEMPLATE_DCALL_MUT_, _DEC_TEMPLATE_DCALL_OUT_)  # TODO intersection with other _DECS
     def __call__(self, **data):
         return self._call(**data)
     def _call(self, **data):
-        raise NotImplementedError
+        raise ViolinException('Not implemented _call')
     
     @staticmethod
-    def _check_call_decs_intersection(keys_call_imm, keys_call_mut, keys_call_out):
+    def _check_call_decs(keys_call_imm, keys_call_mut, keys_call_out):
         args = [keys_call_imm, keys_call_mut, keys_call_out]
         assert all([isinstance(s, set) for s in args])
         assert all([all([isinstance(x, str) for x in s]) for s in args])
@@ -43,8 +38,7 @@ class TransformCall:
 
 class InitPipe(TransformInit):
     def __init__(self, **cnfg):
-        # init_DecsFromTupleToDec(self, TransformInit._DECS_INIT_STARTSWITH)
-        cnfg_keys_checker = DecsChecker(decs=getattr(self, 'decs_'+self._DEC_TEMPLATE_DINIT), check_values=True, use_default_values=True, deepcopy_checked_values=False)
+        cnfg_keys_checker = DecsChecker(decs=getattr(self, 'decs_'+self._DEC_TEMPLATE_DINIT_), check_values=True, use_default_values=True, deepcopy_checked_values=False)
         cnfg, cnfg_external = cnfg_keys_checker(**cnfg)
         assert set(cnfg_external.keys()) == set(), f"""All init keys should be defined as {self._DEC_TEMPLATE_DINIT}_.
 These keys are not defined: {cnfg_external.keys()}."""
@@ -53,42 +47,81 @@ These keys are not defined: {cnfg_external.keys()}."""
 
 class _CallPipe(TransformCall):
     def __init__(self, keys_call_imm, keys_call_mut, keys_call_out):
-        self._check_call_decs_intersection(keys_call_imm, keys_call_mut, keys_call_out)
+        self._check_call_decs(keys_call_imm, keys_call_mut, keys_call_out)
 
         self.__call_keys_checker = DecsChecker(decs=set(keys_call_imm) | set(keys_call_mut), check_values=False, use_default_values=True)
         self.__call_mut_keys_checker = DecsChecker(decs=keys_call_mut, check_values=True, use_default_values=False, deepcopy_checked_values=True)
         self.__call_out_keys_checker = DecsChecker(decs=keys_call_out, check_values=True, use_default_values=True, deepcopy_checked_values=True)
+
+        self.__call_keys_checker = self._keys_checker_wrapper(
+            self.__call_keys_checker, stage_name='before call; input keys vs call keys')
+        self.__call_mut_keys_checker = self._keys_checker_wrapper(
+            self.__call_mut_keys_checker, stage_name='before call; imm vs mut call keys')
+        self.__call_out_keys_checker = self._keys_checker_wrapper(
+            self.__call_out_keys_checker, stage_name='after call; out call keys')
+
         super().__init__()
 
     def __call__(self, **data):
-        data, data_call_imm, data_call_mut = self._before(data)
-        for k in data_call_imm:
-            data_call_mut[k] = deepcopy(data_call_imm[k])
-        data_out = super().__call__(**data_call_mut)
-        data = self._after(data, data_call_imm, data_out)
+        try:
+            data, data_call_imm, data_call_mut = self._before(data)
+        except DecDefaultException as e:
+            raise DecDefaultException(parent=self, dec=e.dec, e=e.e)
+        except DecCheckException as e:
+            raise DecCheckException(parent=self, dec=e.dec, e=e.e)
+        
+        try:
+            for k in data_call_imm:
+                data_call_mut[k] = deepcopy(data_call_imm[k])
+        except Exception as e:
+            raise ViolinException('cant deepcopy an object for DCALL_IMM')
+
+        try:
+            data_out = super().__call__(**data_call_mut)
+        except Exception as e:
+            raise e
+
+        try:
+            data = self._after(data, data_call_imm, data_out)
+        except DecDefaultException as e:
+            raise DecDefaultException(parent=self, dec=e.dec, e=e.e)
+        except DecCheckException as e:
+            raise DecCheckException(parent=self, dec=e.dec, e=e.e)
         return data
+
+    def _keys_checker_wrapper(self, keys_checker, stage_name):
+        def body(**data):
+            try:
+                data_inn, data_ext = keys_checker(**data)
+            except TypeError as e:
+                # data_call_out is not a dict
+                raise DecsFlowException(
+                    not_matched_data_keys=keys_checker.decs,
+                    data_keys='Not a dict',
+                    decs=keys_checker.decs,
+                    flow_stage=stage_name, 
+                    transform=self)
+            except DecsFlowException as e:
+                raise DecsFlowException(
+                    not_matched_data_keys=e.not_matched_data_keys, 
+                    data_keys=e.data_keys, decs=e.decs, flow_stage=stage_name, transform=self)
+            return data_inn, data_ext
+        return body
 
     def _before(self, data):
         for x in data.keys():
             if not isinstance(x, str):
                 print(x)
                 assert False
-
         data_call, data_ext = self.__call_keys_checker(**data)
-        intersection_call_ext = set(data_call.keys()) & set(data_ext.keys())
-        assert intersection_call_ext == set(), "There is intersection between external and call data: {}".format(intersection_call_ext)
-        assert set(data.keys()) - (set(data_call.keys()) | set(data_ext.keys())) == set()
         data = data_ext
-
         data_call_mut, data_call_imm = self.__call_mut_keys_checker(**data_call)
-        assert set(data_call_mut.keys()) & set(data_call_imm.keys()) == set()  # TODO delete
-        assert set(data_call_mut.keys()) | set(data_call_imm.keys()) == set(data_call.keys())  # TODO delete
         return data, data_call_imm, data_call_mut
 
     def _after(self, data, data_call_imm, data_call_out):
         data_call_out, _data = self.__call_out_keys_checker(**data_call_out)
-        assert len(_data.keys()) == 0, f"Check returned keys for {self}; These keys are not declared as DCALL_OUT: {_data.keys()}"
-        assert set(data_call_out.keys()) & set(data_call_imm.keys()) == set()  # TODO delete
+        if len(_data) != 0:
+            raise DecsFlowException(not_matched_data_keys=_data, data_keys=data_call_out, decs=self.__call_out_keys_checker.decs, flow_stage='after call; out call keys', transform=self)
         common_keys = set(data_call_out.keys()) & set(data.keys())
         assert common_keys == set(), f'Common keys: {common_keys}'
         data.update(data_call_imm)
@@ -99,16 +132,15 @@ class _CallPipe(TransformCall):
 
 class CallPipe(_CallPipe):
     def __init__(self):
-        # init_DecsFromTupleToDec(self, TransformCall._DECS_CALL_STARTSWITH)
         super().__init__(
-            keys_call_imm=getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_IMM),
-            keys_call_mut=getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_MUT),
-            keys_call_out=getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_OUT),
+            keys_call_imm=getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_IMM_),
+            keys_call_mut=getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_MUT_),
+            keys_call_out=getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_OUT_),
         )
 
 
 def get_DecsFromTupleToDec():
-    templates_startswith = TransformInit._DECS_INIT_STARTSWITH+TransformCall._DECS_CALL_STARTSWITH
+    templates_startswith = TransformInit._DECS_TEMPLATES_DINIT_+TransformCall._DECS_TEMPLATES_DCALL_
     assert isinstance(templates_startswith, tuple), templates_startswith
     assert all([re.match(Dec.DecKey.RE_TEMPLATE_STARTSWITH, x) is not None for x in templates_startswith]), templates_startswith
 
@@ -130,12 +162,11 @@ def get_DecsFromTupleToDec():
         return func
 
     class DecsFromTupleToDec(type):
-        TEMPLATES_STARTSWITH = templates_startswith
+        __TEMPLATES_STARTSWITH = templates_startswith
 
         def __init__(cls, name, bases, attrs):
-            for template_startswith in cls.TEMPLATES_STARTSWITH:
+            for template_startswith in cls.__TEMPLATES_STARTSWITH:
                 decs = set()
-                # for attr_name in get_decs_attrnames_in_order(cls, template_startswith):
                 for attr_info in inspect.getmembers(cls):
                     attr_name = attr_info[0]
                     if attr_name.startswith(template_startswith):
@@ -150,8 +181,17 @@ def get_DecsFromTupleToDec():
                             dec = dec_generator(attr_name, template_startswith, v)
                         setattr(cls, attr_name, dec)
                         decs.add(dec)
-                setattr(cls, 'decs_'+template_startswith[:-1], decs)
-            TransformCall._check_call_decs_intersection(*[getattr(cls, 'decs_'+d) for d in TransformCall._DECS_CALL])
+                setattr(cls, 'decs_'+template_startswith, decs)
+            try:
+                TransformCall._check_call_decs(*[getattr(cls, 'decs_'+d) for d in TransformCall._DECS_TEMPLATES_DCALL_])
+            except DecsFlowException as e:
+                raise DecsFlowException(
+                    not_matched_data_keys=None,
+                    data_keys=None,
+                    decs=None,
+                    flow_stage='Transform meta; call keys',
+                    transform=cls,
+                )
 
     return DecsFromTupleToDec
 
@@ -176,15 +216,20 @@ class Transform(
     when initing, DINIT_example becomes 'example' string for cnfg for __init__(self, **cnfg)
     similarly with the __call__(self, **data)
 
-    DINIT keys checked without copying
-    DCALL_IMM keys does not checked 
-    DCALL_MUT keys are checked
-    DCALL_OUT keys are checked
+    DINIT keys:     check_values=True, use_default_values=True, deepcopy_checked_values=Fals
+    DCALL_IMM keys: check_values=Fals, use_default_values=True
+    DCALL_MUT keys: check_values=True, use_default_values=True, deepcopy_checked_values=True
+    DCALL_OUT keys: check_values=True, use_default_values=True, deepcopy_checked_values=True
 
     to implement:
     _init(self, **cnfg)
     _call(self, **data)
     """
+    decs_DINIT_ = None
+    decs_DCALL_IMM_ = None
+    decs_DCALL_MUT_ = None
+    decs_DCALL_OUT_ = None
+
     def __init__(self, **cnfg):
         # try:
         InitPipe.__init__(self, **cnfg)
