@@ -65,7 +65,15 @@ These keys are not defined: {cnfg_external.keys()}."""
 
 class _CallPipe(TransformCall):
     def __init__(self, keys_call_imm, keys_call_mut, keys_call_out):
-        self._check_call_decs(keys_call_imm, keys_call_mut, keys_call_out)
+        try:
+            self._check_call_decs(keys_call_imm, keys_call_mut, keys_call_out)
+        except DecsFlowException as e:
+            raise DecsFlowException(
+                not_matched_keys=e.not_matched_keys,
+                list_of_name__keys_set=e.list_of_name__keys_set,
+                flow_stage='Transform init; call keys',
+                transform=self,
+            )
 
         self.__call_keys_checker = DecsChecker(decs=set(keys_call_imm) | set(keys_call_mut), check_values=False, use_default_values=True)
         self.__call_mut_keys_checker = DecsChecker(decs=keys_call_mut, check_values=True, use_default_values=False, deepcopy_checked_values=True)
@@ -163,11 +171,25 @@ class _CallPipe(TransformCall):
 
 class CallPipe(_CallPipe):
     def __init__(self):
+        # TODO check decs_SMTH == what class actually has
         super().__init__(
             keys_call_imm=getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_IMM_),
             keys_call_mut=getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_MUT_),
             keys_call_out=getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_OUT_),
         )
+
+
+def get_attrs_template_startswith(cls, template_startswith):
+    attrs = set()
+    for attr_info in inspect.getmembers(cls):
+        attr_name = attr_info[0]
+        if attr_name.startswith(template_startswith):
+            attrs.append(attr_name)
+        return attrs
+def get_decs(cls, template_startswith):
+    attrs = get_attrs_template_startswith(cls, template_startswith)
+    for attr_name in attrs:
+        pass
 
 
 def get_DecsFromTupleToDec():
@@ -193,10 +215,8 @@ def get_DecsFromTupleToDec():
         return func
 
     class DecsFromTupleToDec(type):
-        __TEMPLATES_STARTSWITH = templates_startswith
-
         def __init__(cls, name, bases, attrs):
-            for template_startswith in cls.__TEMPLATES_STARTSWITH:
+            for template_startswith in TransformInit._DECS_TEMPLATES_DINIT_+TransformCall._DECS_TEMPLATES_DCALL_:
                 decs = set()
                 for attr_info in inspect.getmembers(cls):
                     attr_name = attr_info[0]
@@ -210,7 +230,7 @@ def get_DecsFromTupleToDec():
                             assert len(v) == 2, f"{attr_name}: {v}"
                             v = tuple([preproc_classmethod(x, cls) for x in v])
                             dec = dec_generator(attr_name, template_startswith, v)
-                        setattr(cls, attr_name, dec)
+                            setattr(cls, attr_name, dec)
                         decs.add(dec)
                 setattr(cls, 'decs_'+template_startswith, decs)
             try:

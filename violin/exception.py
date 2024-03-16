@@ -18,6 +18,6 @@ class DecsFlowException(ViolinException):
         self.not_matched_keys, self.list_of_name__keys_set, self.flow_stage, self.transform \
             = not_matched_keys, list_of_name__keys_set, flow_stage, transform
     def __str__(self):
-        return f"""Declarations flow error at transform {self.transform} at stage {self.flow_stage}.
+        return f"""Declarations flow error at transform {self.transform} at the stage "{self.flow_stage}".
 List of (name, keys_set): {str(self.list_of_name__keys_set)}.
 Some problematic keys: {str(self.not_matched_keys)}."""
