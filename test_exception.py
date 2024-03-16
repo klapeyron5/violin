@@ -2,7 +2,6 @@ from violin import Transform, TransformPipeline
 from violin import static_declaration
 from violin.exception import DecsFlowException
 from copy import deepcopy
-import traceback
 from violin import checkers as vch
 
 

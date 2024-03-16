@@ -161,17 +161,27 @@ class _CallPipe(TransformCall):
 
 class CallPipe(_CallPipe):
     def __init__(self):
-        # TODO check decs_SMTH == what class actually has
-        keys_call_imm = getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_IMM_)
-        keys_call_mut = getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_MUT_)
-        keys_call_out = getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_OUT_)
-
-        assert keys_call_imm == get_decs(self, self._DEC_TEMPLATE_DCALL_IMM_)
-        assert keys_call_mut == get_decs(self, self._DEC_TEMPLATE_DCALL_MUT_)
-        assert keys_call_out == get_decs(self, self._DEC_TEMPLATE_DCALL_OUT_)
-
+        for dec_call_template in self._DECS_TEMPLATES_DCALL_:
+            try:
+                attr_name = 'decs_'+dec_call_template
+                specific_keys_call = getattr(self, attr_name)
+            except AttributeError as e:
+                raise ViolinException(f'No {attr_name} attribute at the stage "Transform CallPipe init"')
+            specific_call_decs = get_decs(self, dec_call_template)  # TODO exceptions
+            diff = specific_keys_call ^ specific_call_decs
+            if diff != set():
+                raise DecsFlowException(
+                    not_matched_keys=diff,
+                    list_of_name__keys_set=[
+                        (dec_call_template, specific_keys_call),
+                        (attr_name, specific_call_decs),
+                    ],
+                    flow_stage='Transform init; call keys',
+                    transform=self,
+                )
         try:
-            self._check_call_decs(keys_call_imm, keys_call_mut, keys_call_out)
+            # TODO analogous structure in meta
+            self._check_call_decs(*[getattr(self, 'decs_'+d) for d in TransformCall._DECS_TEMPLATES_DCALL_])
         except DecsFlowException as e:
             raise DecsFlowException(
                 not_matched_keys=e.not_matched_keys,
@@ -179,12 +189,7 @@ class CallPipe(_CallPipe):
                 flow_stage='Transform init; call keys',
                 transform=self,
             )
-        
-        super().__init__(
-            keys_call_imm=keys_call_imm,
-            keys_call_mut=keys_call_mut,
-            keys_call_out=keys_call_out,
-        )
+        super().__init__(*[getattr(self, 'decs_'+d) for d in TransformCall._DECS_TEMPLATES_DCALL_])
 
 
 def get_attrs_template_startswith(cls, template_startswith):
