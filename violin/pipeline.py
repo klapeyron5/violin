@@ -33,7 +33,7 @@ class TransformPipeline(Transform):
             self.get_dataflow()):
             setattr(self, 'decs_'+tmplt, decs)
             for dec in decs:
-                setattr(self, tmplt+'_'+str(dec), dec)
+                setattr(self, tmplt+str(dec), dec)
         CallPipe.__init__(self,)
     
     def _init(self, **cnfg):

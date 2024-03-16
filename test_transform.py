@@ -459,7 +459,7 @@ def wrap_test(test):
         print(f'ERROR in {test.__name__}')
         print('Exception type:', type(e))
         print('Exception txt:', str(e))
-        # print('traceback:', traceback.print_exc())
+        print('traceback:', traceback.print_exc())
     return 1
 
 

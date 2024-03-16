@@ -65,16 +65,6 @@ These keys are not defined: {cnfg_external.keys()}."""
 
 class _CallPipe(TransformCall):
     def __init__(self, keys_call_imm, keys_call_mut, keys_call_out):
-        try:
-            self._check_call_decs(keys_call_imm, keys_call_mut, keys_call_out)
-        except DecsFlowException as e:
-            raise DecsFlowException(
-                not_matched_keys=e.not_matched_keys,
-                list_of_name__keys_set=e.list_of_name__keys_set,
-                flow_stage='Transform init; call keys',
-                transform=self,
-            )
-
         self.__call_keys_checker = DecsChecker(decs=set(keys_call_imm) | set(keys_call_mut), check_values=False, use_default_values=True)
         self.__call_mut_keys_checker = DecsChecker(decs=keys_call_mut, check_values=True, use_default_values=False, deepcopy_checked_values=True)
         self.__call_out_keys_checker = DecsChecker(decs=keys_call_out, check_values=True, use_default_values=True, deepcopy_checked_values=True)
@@ -172,32 +162,40 @@ class _CallPipe(TransformCall):
 class CallPipe(_CallPipe):
     def __init__(self):
         # TODO check decs_SMTH == what class actually has
+        keys_call_imm = getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_IMM_)
+        keys_call_mut = getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_MUT_)
+        keys_call_out = getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_OUT_)
+
+        assert keys_call_imm == get_decs(self, self._DEC_TEMPLATE_DCALL_IMM_)
+        assert keys_call_mut == get_decs(self, self._DEC_TEMPLATE_DCALL_MUT_)
+        assert keys_call_out == get_decs(self, self._DEC_TEMPLATE_DCALL_OUT_)
+
+        try:
+            self._check_call_decs(keys_call_imm, keys_call_mut, keys_call_out)
+        except DecsFlowException as e:
+            raise DecsFlowException(
+                not_matched_keys=e.not_matched_keys,
+                list_of_name__keys_set=e.list_of_name__keys_set,
+                flow_stage='Transform init; call keys',
+                transform=self,
+            )
+        
         super().__init__(
-            keys_call_imm=getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_IMM_),
-            keys_call_mut=getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_MUT_),
-            keys_call_out=getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_OUT_),
+            keys_call_imm=keys_call_imm,
+            keys_call_mut=keys_call_mut,
+            keys_call_out=keys_call_out,
         )
 
 
 def get_attrs_template_startswith(cls, template_startswith):
-    attrs = set()
+    attrs_names = set()
     for attr_info in inspect.getmembers(cls):
         attr_name = attr_info[0]
         if attr_name.startswith(template_startswith):
-            attrs.append(attr_name)
-        return attrs
-def get_decs(cls, template_startswith):
-    attrs = get_attrs_template_startswith(cls, template_startswith)
-    for attr_name in attrs:
-        pass
+            attrs_names.add(attr_name)
+    return attrs_names
 
-
-def get_DecsFromTupleToDec():
-    templates_startswith = TransformInit._DECS_TEMPLATES_DINIT_+TransformCall._DECS_TEMPLATES_DCALL_
-    assert isinstance(templates_startswith, tuple), templates_startswith
-    assert all([re.match(Dec.DecKey.RE_TEMPLATE_STARTSWITH, x) is not None for x in templates_startswith]), templates_startswith
-
-    def preproc_classmethod(func, cls):
+def dec_preproc_classmethod(func, cls):
         c0 = isinstance(func, classmethod)
         if c0 or isinstance(func, staticmethod):
             # decide that vv is @classmethod of this cls and vv should be transformed
@@ -214,24 +212,32 @@ def get_DecsFromTupleToDec():
                 assert func.__self__ is cls
         return func
 
+def get_decs(cls, template_startswith):
+    attrs_names = get_attrs_template_startswith(cls, template_startswith)
+    decs = set()
+    for attr_name in attrs_names:
+        v = getattr(cls, attr_name)
+        if isinstance(v, Dec):
+            assert attr_name[len(template_startswith):] == v, f"{attr_name} != {v} for cls {cls}"
+            dec = v
+        else:
+            assert isinstance(v, tuple), f"{attr_name}: {v}"
+            assert len(v) == 2, f"{attr_name}: {v}"
+            v = tuple([dec_preproc_classmethod(x, cls) for x in v])  # TODO check x is callable with a single argument
+            dec = dec_generator(attr_name, template_startswith, v)
+            setattr(cls, attr_name, dec)
+        decs.add(dec)
+    return decs
+
+def get_DecsFromTupleToDec():
+    templates_startswith = TransformInit._DECS_TEMPLATES_DINIT_+TransformCall._DECS_TEMPLATES_DCALL_
+    assert isinstance(templates_startswith, tuple), templates_startswith
+    assert all([re.match(Dec.DecKey.RE_TEMPLATE_STARTSWITH, x) is not None for x in templates_startswith]), templates_startswith
+
     class DecsFromTupleToDec(type):
         def __init__(cls, name, bases, attrs):
             for template_startswith in TransformInit._DECS_TEMPLATES_DINIT_+TransformCall._DECS_TEMPLATES_DCALL_:
-                decs = set()
-                for attr_info in inspect.getmembers(cls):
-                    attr_name = attr_info[0]
-                    if attr_name.startswith(template_startswith):
-                        v = getattr(cls, attr_name)
-                        if isinstance(v, Dec):
-                            assert attr_name[len(template_startswith):] == v, f"{attr_name} != {v} for cls {cls}"
-                            dec = v
-                        else:
-                            assert isinstance(v, tuple), f"{attr_name}: {v}"
-                            assert len(v) == 2, f"{attr_name}: {v}"
-                            v = tuple([preproc_classmethod(x, cls) for x in v])
-                            dec = dec_generator(attr_name, template_startswith, v)
-                            setattr(cls, attr_name, dec)
-                        decs.add(dec)
+                decs = get_decs(cls, template_startswith)
                 setattr(cls, 'decs_'+template_startswith, decs)
             try:
                 TransformCall._check_call_decs(*[getattr(cls, 'decs_'+d) for d in TransformCall._DECS_TEMPLATES_DCALL_])
@@ -242,7 +248,6 @@ def get_DecsFromTupleToDec():
                     flow_stage='Transform meta; call keys',
                     transform=cls,
                 )
-
     return DecsFromTupleToDec
 
 
