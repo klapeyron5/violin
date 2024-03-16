@@ -7,6 +7,8 @@ from violin import checkers as vch
 
 def test_1():
     class T0(Transform):
+        DCALL_IMM_key0 = (None, None)
+        DCALL_OUT_key0 = (None, None)
         def _init(self, **cnfg):
             pass
         def _call(self, **data):

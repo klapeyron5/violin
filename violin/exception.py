@@ -14,10 +14,10 @@ class DecDefaultException(DecException):
     pass
 
 class DecsFlowException(ViolinException):
-    def __init__(self, not_matched_data_keys, data_keys, decs, flow_stage=None, transform=None):
-        self.not_matched_data_keys, self.data_keys, self.decs, self.flow_stage, self.transform \
-            = not_matched_data_keys, data_keys, decs, flow_stage, transform
+    def __init__(self, not_matched_keys, list_of_name__keys_set, flow_stage=None, transform=None):
+        self.not_matched_keys, self.list_of_name__keys_set, self.flow_stage, self.transform \
+            = not_matched_keys, list_of_name__keys_set, flow_stage, transform
     def __str__(self):
         return f"""Declarations flow error at transform {self.transform} at stage {self.flow_stage}.
-Declarations {str(self.decs)} didn't match with data_keys: {str(self.data_keys)}.
-Some problematic keys: {str(self.not_matched_data_keys)}."""
+List of (name, keys_set): {str(self.list_of_name__keys_set)}.
+Some problematic keys: {str(self.not_matched_keys)}."""
