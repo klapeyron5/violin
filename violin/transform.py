@@ -166,7 +166,7 @@ class CallPipe(_CallPipe):
                 attr_name = 'decs_'+dec_call_template
                 specific_keys_call = getattr(self, attr_name)
             except AttributeError as e:
-                raise ViolinException(f'No {attr_name} attribute at the stage "Transform CallPipe init"')
+                raise ViolinException(f'No {attr_name} attribute at the stage "Transform init; call keys"')
             specific_call_decs = get_decs(self, dec_call_template)  # TODO exceptions
             diff = specific_keys_call ^ specific_call_decs
             if diff != set():

@@ -1,7 +1,8 @@
-from test_transform import main as main_transform
-from test_exception import main as main_exception
+import test_transform, test_exception
+from test_utils import do_test_modules
+
+test_modules = [test_transform, test_exception]
 
 
 if __name__ == '__main__':
-    main_transform()
-    main_exception()
+    do_test_modules(test_modules)
