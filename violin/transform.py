@@ -30,10 +30,28 @@ class TransformCall:
         assert all([isinstance(s, set) for s in args])
         assert all([all([isinstance(x, str) for x in s]) for s in args])
 
-        call_imm_and_call_mut = set(keys_call_imm) & set(keys_call_mut)
-        assert call_imm_and_call_mut == set(), f"Error: intersection between keys_call_imm and keys_call_mut: {call_imm_and_call_mut}."
+        call_imm_and_mut = set(keys_call_imm) & set(keys_call_mut)
+        if call_imm_and_mut != set():
+            raise DecsFlowException(
+                not_matched_keys=call_imm_and_mut,
+                list_of_name__keys_set=[
+                    ('keys DCALL_IMM', keys_call_imm),
+                    ('keys DCALL_MUT', keys_call_mut),
+                ],
+                flow_stage=None,
+                transform=None,
+            )
         call_imm_and_out = set(keys_call_out) & set(keys_call_imm)
-        assert call_imm_and_out == set(), f"Error: intersection between keys_call_imm and keys_call_out: {call_imm_and_out}."
+        if call_imm_and_out != set():
+            raise DecsFlowException(
+                not_matched_keys=call_imm_and_out,
+                list_of_name__keys_set=[
+                    ('keys DCALL_IMM', keys_call_imm),
+                    ('keys DCALL_OUT', keys_call_out),
+                ],
+                flow_stage=None,
+                transform=None,
+            )
 
 
 class InitPipe(TransformInit):
@@ -47,18 +65,16 @@ These keys are not defined: {cnfg_external.keys()}."""
 
 class _CallPipe(TransformCall):
     def __init__(self, keys_call_imm, keys_call_mut, keys_call_out):
-        self._check_call_decs(keys_call_imm, keys_call_mut, keys_call_out)
-
         self.__call_keys_checker = DecsChecker(decs=set(keys_call_imm) | set(keys_call_mut), check_values=False, use_default_values=True)
         self.__call_mut_keys_checker = DecsChecker(decs=keys_call_mut, check_values=True, use_default_values=False, deepcopy_checked_values=True)
         self.__call_out_keys_checker = DecsChecker(decs=keys_call_out, check_values=True, use_default_values=True, deepcopy_checked_values=True)
 
         self.__call_keys_checker = self._keys_checker_wrapper(
-            self.__call_keys_checker, stage_name='before call; input keys vs call keys')
+            self.__call_keys_checker, keys_set_name='DCALL', stage_name='before call; input keys vs call keys')
         self.__call_mut_keys_checker = self._keys_checker_wrapper(
-            self.__call_mut_keys_checker, stage_name='before call; imm vs mut call keys')
+            self.__call_mut_keys_checker, keys_set_name='DCALL_MUT', stage_name='before call; imm vs mut call keys')
         self.__call_out_keys_checker = self._keys_checker_wrapper(
-            self.__call_out_keys_checker, stage_name='after call; out call keys')
+            self.__call_out_keys_checker, keys_set_name='DCALL_OUT',stage_name='after call; out call keys')
 
         super().__init__()
 
@@ -89,22 +105,27 @@ class _CallPipe(TransformCall):
             raise DecCheckException(parent=self, dec=e.dec, e=e.e)
         return data
 
-    def _keys_checker_wrapper(self, keys_checker, stage_name):
+    def _keys_checker_wrapper(self, keys_checker: DecsChecker, keys_set_name: DecsChecker, stage_name: DecsChecker):
         def body(**data):
             try:
                 data_inn, data_ext = keys_checker(**data)
             except TypeError as e:
                 # data_call_out is not a dict
                 raise DecsFlowException(
-                    not_matched_data_keys=keys_checker.decs,
-                    data_keys='Not a dict',
-                    decs=keys_checker.decs,
+                    not_matched_keys=keys_checker.decs,
+                    list_of_name__keys_set=[
+                        ('data is not a dict:', type(data)),
+                        (keys_set_name, keys_checker.decs),
+                    ],
                     flow_stage=stage_name, 
                     transform=self)
             except DecsFlowException as e:
                 raise DecsFlowException(
-                    not_matched_data_keys=e.not_matched_data_keys, 
-                    data_keys=e.data_keys, decs=e.decs, flow_stage=stage_name, transform=self)
+                    not_matched_keys=e.not_matched_keys,
+                    list_of_name__keys_set=e.list_of_name__keys_set,
+                    flow_stage=stage_name,
+                    transform=self,
+                )
             return data_inn, data_ext
         return body
 
@@ -121,7 +142,15 @@ class _CallPipe(TransformCall):
     def _after(self, data, data_call_imm, data_call_out):
         data_call_out, _data = self.__call_out_keys_checker(**data_call_out)
         if len(_data) != 0:
-            raise DecsFlowException(not_matched_data_keys=_data, data_keys=data_call_out, decs=self.__call_out_keys_checker.decs, flow_stage='after call; out call keys', transform=self)
+            raise DecsFlowException(
+                not_matched_keys=_data,
+                list_of_name__keys_set=[
+                    ('output call data', data_call_out.keys()),
+                    ('DCALL_OUT', self.__call_out_keys_checker.decs),
+                ],
+                flow_stage='after call; out call keys',
+                transform=self,
+            )
         common_keys = set(data_call_out.keys()) & set(data.keys())
         assert common_keys == set(), f'Common keys: {common_keys}'
         data.update(data_call_imm)
@@ -132,19 +161,46 @@ class _CallPipe(TransformCall):
 
 class CallPipe(_CallPipe):
     def __init__(self):
-        super().__init__(
-            keys_call_imm=getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_IMM_),
-            keys_call_mut=getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_MUT_),
-            keys_call_out=getattr(self, 'decs_'+self._DEC_TEMPLATE_DCALL_OUT_),
-        )
+        for dec_call_template in self._DECS_TEMPLATES_DCALL_:
+            try:
+                attr_name = 'decs_'+dec_call_template
+                specific_keys_call = getattr(self, attr_name)
+            except AttributeError as e:
+                raise ViolinException(f'No {attr_name} attribute at the stage "Transform init; call keys"')
+            specific_call_decs = get_decs(self, dec_call_template)  # TODO exceptions
+            diff = specific_keys_call ^ specific_call_decs
+            if diff != set():
+                raise DecsFlowException(
+                    not_matched_keys=diff,
+                    list_of_name__keys_set=[
+                        (dec_call_template, specific_keys_call),
+                        (attr_name, specific_call_decs),
+                    ],
+                    flow_stage='Transform init; call keys',
+                    transform=self,
+                )
+        try:
+            # TODO analogous structure in meta
+            self._check_call_decs(*[getattr(self, 'decs_'+d) for d in TransformCall._DECS_TEMPLATES_DCALL_])
+        except DecsFlowException as e:
+            raise DecsFlowException(
+                not_matched_keys=e.not_matched_keys,
+                list_of_name__keys_set=e.list_of_name__keys_set,
+                flow_stage='Transform init; call keys',
+                transform=self,
+            )
+        super().__init__(*[getattr(self, 'decs_'+d) for d in TransformCall._DECS_TEMPLATES_DCALL_])
 
 
-def get_DecsFromTupleToDec():
-    templates_startswith = TransformInit._DECS_TEMPLATES_DINIT_+TransformCall._DECS_TEMPLATES_DCALL_
-    assert isinstance(templates_startswith, tuple), templates_startswith
-    assert all([re.match(Dec.DecKey.RE_TEMPLATE_STARTSWITH, x) is not None for x in templates_startswith]), templates_startswith
+def get_attrs_template_startswith(cls, template_startswith):
+    attrs_names = set()
+    for attr_info in inspect.getmembers(cls):
+        attr_name = attr_info[0]
+        if attr_name.startswith(template_startswith):
+            attrs_names.add(attr_name)
+    return attrs_names
 
-    def preproc_classmethod(func, cls):
+def dec_preproc_classmethod(func, cls):
         c0 = isinstance(func, classmethod)
         if c0 or isinstance(func, staticmethod):
             # decide that vv is @classmethod of this cls and vv should be transformed
@@ -161,38 +217,42 @@ def get_DecsFromTupleToDec():
                 assert func.__self__ is cls
         return func
 
-    class DecsFromTupleToDec(type):
-        __TEMPLATES_STARTSWITH = templates_startswith
+def get_decs(cls, template_startswith):
+    attrs_names = get_attrs_template_startswith(cls, template_startswith)
+    decs = set()
+    for attr_name in attrs_names:
+        v = getattr(cls, attr_name)
+        if isinstance(v, Dec):
+            assert attr_name[len(template_startswith):] == v, f"{attr_name} != {v} for cls {cls}"
+            dec = v
+        else:
+            assert isinstance(v, tuple), f"{attr_name}: {v}"
+            assert len(v) == 2, f"{attr_name}: {v}"
+            v = tuple([dec_preproc_classmethod(x, cls) for x in v])  # TODO check x is callable with a single argument
+            dec = dec_generator(attr_name, template_startswith, v)
+            setattr(cls, attr_name, dec)
+        decs.add(dec)
+    return decs
 
+def get_DecsFromTupleToDec():
+    templates_startswith = TransformInit._DECS_TEMPLATES_DINIT_+TransformCall._DECS_TEMPLATES_DCALL_
+    assert isinstance(templates_startswith, tuple), templates_startswith
+    assert all([re.match(Dec.DecKey.RE_TEMPLATE_STARTSWITH, x) is not None for x in templates_startswith]), templates_startswith
+
+    class DecsFromTupleToDec(type):
         def __init__(cls, name, bases, attrs):
-            for template_startswith in cls.__TEMPLATES_STARTSWITH:
-                decs = set()
-                for attr_info in inspect.getmembers(cls):
-                    attr_name = attr_info[0]
-                    if attr_name.startswith(template_startswith):
-                        v = getattr(cls, attr_name)
-                        if isinstance(v, Dec):
-                            assert attr_name[len(template_startswith):] == v, f"{attr_name} != {v} for cls {cls}"
-                            dec = v
-                        else:
-                            assert isinstance(v, tuple), f"{attr_name}: {v}"
-                            assert len(v) == 2, f"{attr_name}: {v}"
-                            v = tuple([preproc_classmethod(x, cls) for x in v])
-                            dec = dec_generator(attr_name, template_startswith, v)
-                        setattr(cls, attr_name, dec)
-                        decs.add(dec)
+            for template_startswith in TransformInit._DECS_TEMPLATES_DINIT_+TransformCall._DECS_TEMPLATES_DCALL_:
+                decs = get_decs(cls, template_startswith)
                 setattr(cls, 'decs_'+template_startswith, decs)
             try:
                 TransformCall._check_call_decs(*[getattr(cls, 'decs_'+d) for d in TransformCall._DECS_TEMPLATES_DCALL_])
             except DecsFlowException as e:
                 raise DecsFlowException(
-                    not_matched_data_keys=None,
-                    data_keys=None,
-                    decs=None,
+                    not_matched_keys=e.not_matched_keys,
+                    list_of_name__keys_set=e.list_of_name__keys_set,
                     flow_stage='Transform meta; call keys',
                     transform=cls,
                 )
-
     return DecsFromTupleToDec
 
 
