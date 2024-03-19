@@ -69,12 +69,12 @@ class _CallPipe(TransformCall):
         self.__call_mut_keys_checker = DecsChecker(decs=keys_call_mut, check_values=True, use_default_values=False, deepcopy_checked_values=True)
         self.__call_out_keys_checker = DecsChecker(decs=keys_call_out, check_values=True, use_default_values=True, deepcopy_checked_values=True)
 
-        self.__call_keys_checker = self._keys_checker_wrapper(
-            self.__call_keys_checker, keys_set_name='DCALL', stage_name='before call; input keys vs call keys')
-        self.__call_mut_keys_checker = self._keys_checker_wrapper(
-            self.__call_mut_keys_checker, keys_set_name='DCALL_MUT', stage_name='before call; imm vs mut call keys')
-        self.__call_out_keys_checker = self._keys_checker_wrapper(
-            self.__call_out_keys_checker, keys_set_name='DCALL_OUT',stage_name='after call; out call keys')
+        for a,b,c in [
+            (self.__call_keys_checker, 'DCALL', 'before call; input keys vs call keys'),
+            (self.__call_mut_keys_checker, 'DCALL_MUT', 'before call; imm vs mut call keys'),
+            (self.__call_out_keys_checker, 'DCALL_OUT', 'after call; out call keys'),
+        ]:
+            a.__call__ = self._keys_checker_wrapper(a.__call__, keys_set_name=b, stage_name=c)
 
         super().__init__()
 
@@ -146,7 +146,7 @@ class _CallPipe(TransformCall):
                 not_matched_keys=_data,
                 list_of_name__keys_set=[
                     ('output call data', data_call_out.keys()),
-                    ('DCALL_OUT', self.__call_out_keys_checker.decs),
+                    ('DCALL_OUT', self.__call_out_keys_checker.decs),  # TODO 'function' object has no attribute 'decs'
                 ],
                 flow_stage='after call; out call keys',
                 transform=self,
