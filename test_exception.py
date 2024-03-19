@@ -38,3 +38,29 @@ def test_2():
         assert e.not_matched_keys == {'key2'}
     else:
         raise Exception
+
+
+def test_3():
+    class T0(Transform):
+        DCALL_IMM_key0 = (None, None)
+        DCALL_MUT_key1 = (None, None)
+        DCALL_OUT_key2 = (None, None)
+        def _init(self, **cnfg):
+            pass
+        def _call(self, **data):
+            return {
+                self.DCALL_OUT_key2: 0,
+                'key3': 1,
+            }
+    # TODO decs is not set but tuple or list
+    # TODO decs contains not Dec
+    t = T0()
+    try:
+        t(**{
+            t.DCALL_IMM_key0: None,
+            t.DCALL_MUT_key1: None,
+        })
+    except DecsFlowException as e:
+        assert e.not_matched_keys == {'key3'}
+    else:
+        raise Exception

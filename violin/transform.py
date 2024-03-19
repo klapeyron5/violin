@@ -143,9 +143,9 @@ class _CallPipe(TransformCall):
         data_call_out, _data = self.__call_out_keys_checker(**data_call_out)
         if len(_data) != 0:
             raise DecsFlowException(
-                not_matched_keys=_data,
+                not_matched_keys=set(_data.keys()),
                 list_of_name__keys_set=[
-                    ('output call data', data_call_out.keys()),
+                    ('output call data', set(data_call_out.keys())),
                     ('DCALL_OUT', self.__call_out_keys_checker.decs),  # TODO 'function' object has no attribute 'decs'
                 ],
                 flow_stage='after call; out call keys',
